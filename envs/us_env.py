@@ -1,6 +1,7 @@
 import math
 import numpy as np
 import gym
+import os
 from gym import spaces
 from envs.generator import ConstPhantomGenerator
 from envs.fieldii import Field2
@@ -9,6 +10,7 @@ from envs.fieldii import Field2
 import matplotlib.pyplot as plt
 import matplotlib.ticker
 from mpl_toolkits.mplot3d import Axes3D
+import subprocess
 import logging
 
 _LOGGER = logging.getLogger(__name__)
@@ -20,10 +22,9 @@ class PhantomUsEnv(gym.Env):
         imaging,
         phantom_generator,
         probe_generator,
-        max_steps=16,
+        max_steps=50,
         no_workers=2,
         trajectory_logger=None,
-        angle_reward_coeff=0,
         use_cache=False,
         step_size=10/1000, # [m]
         rot_deg=10 # [deg]
@@ -45,12 +46,12 @@ class PhantomUsEnv(gym.Env):
         self.current_episode = -1
         # To reduce the number of calls to FieldII, we store lastly seen
         # observation.
-        self.current_observation = None
-        self.angle_reward_coeff = angle_reward_coeff
         self.out_of_bounds = None
-        self.current_distance = None
-        self.current_angle = None
+        self.current_observation = None
+        self.last_distance = None
+        self.last_error = None
         self.distance_list = []
+        info = {"is_success": None}
 
         self.field_session = Field2(no_workers=no_workers)
         self.use_cache = use_cache
@@ -118,8 +119,8 @@ class PhantomUsEnv(gym.Env):
         self.phantom = next(self.phantom_generator)
         self.probe = next(self.probe_generator)
         self.out_of_bounds = False
-        self.current_distance = self._get_distance() 
-        self.current_angle = self.probe.angle
+        self.last_distance = self._get_distance()
+        self.last_error = self.get_error()
         self.current_step = 0
         self.current_episode += 1
         o = self._get_observation()
@@ -143,19 +144,21 @@ class PhantomUsEnv(gym.Env):
         Returns:
             observation, reward, is episode over?, diagnostic info (currently empty dict)
         """
-        # perform action -> compute reward -> _udpdate_state() -> get_observation -> log state
-        if self.current_step >= self.max_steps or self.out_of_bounds:
+        # perform action -> compute reward -> _update_state() -> get_observation -> log state
+        if self._check_termination_conditions():
             raise RuntimeError("This episode is over, reset the environment.")
         self.current_step += 1
         self._perform_action(action)
+        o = self._get_observation()
+
         reward = self._get_reward()
         self._check_distance_list()
         # Update current state independently to the action
         # (for example apply shaking noise to the probe position).
         self._update_state()
-        o = self._get_observation()
+
         self.current_observation = o
-        episode_over = self.current_step >= self.max_steps or self.out_of_bounds
+        episode_over, info["is_success"] = self._check_termination_conditions()
 
         if self.trajectory_logger is not None:
             self.trajectory_logger.log_action(
@@ -170,7 +173,7 @@ class PhantomUsEnv(gym.Env):
                 step=self.current_step,
                 env=self
             )
-        return o, reward, episode_over, {}
+        return o, reward, episode_over, info
 
     def render(self, mode='rgb_array', views=None):
         """
@@ -191,11 +194,6 @@ class PhantomUsEnv(gym.Env):
         else:
             super(PhantomUsEnv).render(mode=mode)
 
-    #def seed(self, seed=None):
-    #    # TODO(pjarosik) gather all seeds here
-    #    raise NotImplementedError("NYI (seeds are currently set by generator's "
-    #                              "constructors).")
-
     def close(self):
         self.field_session.close()
 
@@ -210,11 +208,34 @@ class PhantomUsEnv(gym.Env):
         }
 
     def _get_reward(self):
-        # TO IMPLEMENT
-        raise NotImplementedError
+        if self.out_of_bounds:
+            return -1
+        else:
+            e = self.get_error()
+            e_thresh = 0.2
+            reward_clipped = 1 - (e/e_thresh) if e<=e_thresh else 0
+            
+            a_p, a_r = 0.5, 0.2
+            if not math.isclose(e, self.last_error, rel_told = 1e-3):
+                if e > self.last_error:
+                    reward_hint = -a_p
+                else:
+                    reward_hint = a_r
+            else:
+                reward_hint = 0
+
+            self.last_error = e
+            reward = reward_clipped + reward_hint
+            
+            return reward
 
     def _update_state(self):
-        # TO IMPLEMENT
+        raise NotImplementedError
+        
+    def _is_episode_successful(self):
+        raise NotImplementedError
+    
+    def get_error(self):
         raise NotImplementedError
 
     def _perform_action(self, action):
@@ -223,10 +244,24 @@ class PhantomUsEnv(gym.Env):
         self._move_focal_point_if_possible(x_t, z_t)
         self.probe = self.probe.rotate(theta_t)
     
+    def _get_pos_diff(self):    
+        # Position in the current timestep.
+        x_t, _, z_t = self.probe.get_focal_point_pos()
+        # Position of the goal.
+        x_g, _, z_g = self.phantom.get_main_object().belly.pos
+        return x_t - x_g, z_t - z_g
+        
+    def _get_angle_diff(self):
+        # Angle in the current timestep.
+        theta_t = self.probe.angle
+        # Angle of the goal.
+        theta_g = self.phantom.get_main_object().angle
+        return theta_t - theta_g
+    
     def _get_distance(self):
-        tracked_pos = self.phantom.get_main_object().belly.pos
-        current_pos = self.probe.get_focal_point_pos()
-        return np.abs(tracked_pos[0]-current_pos[0])
+        delta_xyz = np.array(self._get_pos_diff())
+        distance = np.sqrt(np.sum(np.power(delta_xyz, 2)))
+        return distance
 
     def _move_focal_point_if_possible(self, x_t, z_t):
         pr_pos_x_l = (self.probe.pos[0] - self.probe.width/2) + x_t
@@ -249,7 +284,9 @@ class PhantomUsEnv(gym.Env):
         else:
             self.out_of_bounds = True 
         if le(z_border_l, pr_pos_z) and ge(z_border_r, pr_pos_z):
-            self.probe = self.probe.change_focal_depth(z_t)   
+            self.probe = self.probe.change_focal_depth(z_t)
+        else:
+            self.out_of_bounds = True
 
     def _get_available_x_pos(self):
         x_border = self.phantom.x_border
@@ -263,7 +300,7 @@ class PhantomUsEnv(gym.Env):
         if self.use_cache:
             return self._get_cached_observation()
         else:
-            return self._get_image()
+            return self._get_image()  
 
     def _get_cached_observation(self):
         # Assumes, that objects in the phantom does not move (are 'static').
@@ -278,11 +315,49 @@ class PhantomUsEnv(gym.Env):
         else:
             bmode = self._get_image()
             self._cache[state] = bmode
-        return self._cache[state]
+        return self._cache[state]     
+
+    def _check_distance_list(self):
+        """
+        Check if the distance from the goal for 3 consecutive actions
+        is less than a threshold. If that's true, reduce the step size.
+        This function is called after an action is taken (not in env.reset()).
+        Collect distances in a list, if there are 2 elements, compare them.
+        If the difference < threshold, check if the difference between the last
+        element and the distance collected from the last step meets the condition.
+        """
+        if len(self.distance_list) < 2:
+            self.distance_list.append(self.last_distance)        
+        elif len(self.distance_list) == 2:
+            if not math.isclose(self.distance_list[0], self.distance_list[1], abs_tol=0.01):
+                self.distance_list = [self.distance_list[1], self.last_distance]
+            elif math.isclose(self.distance_list[1], self.last_distance, abs_tol=0.01):
+                self.step_size -= 2/1000
+                self.rot_deg -= 2
+                self.distance_list.clear()
+            else:
+                self.distance_list = self.last_distance
+
+    def _check_termination_conditions(self):
+        """
+        Check if the episode in over.
+        Conditions to terminate an episode:
+        1) Probe is outside the phantom.
+        2) Reached max number of steps.
+        3) Action step has reached zero.
+        In addition, if episode's over, check if it reached the goal pose.
+        """
+        if self.current_step >= self.max_steps or self.out_of_bounds or math.isclose(self.step_size, 0., abs_tol= 0.01):
+            episode_over = True
+        if not episode_over:
+            success = None
+        else:
+            success = self.is_episode_successful()
+        return episode_over, success
 
     def _get_image(self):
         points, amps, _ = self.probe.get_fov(self.phantom)
-        rf_array, t_start = self.field_session.simulate_linear_array(
+        rf_array, _ = self.field_session.simulate_linear_array(
             points, amps,
             sampling_frequency=self.imaging.fs,
             no_lines=self.imaging.no_lines,
@@ -290,7 +365,28 @@ class PhantomUsEnv(gym.Env):
         bmode = self.imaging.image(rf_array)
         bmode = bmode.reshape((1,)+bmode.shape)
         _LOGGER.debug("B-mode image shape: %s" % str(bmode.shape))
+        np.savetxt(os.path.join(os.getcwd(), 'rf_data_test.csv'), rf_array.squeeze(), delimiter=",")
+        np.savetxt(os.path.join(os.getcwd(), 'bmode_test.csv'), bmode.squeeze(), delimiter=",")
         return bmode
+    
+    def is_episode_successful(self):
+        """
+        Returns true if the position and angle of the
+        probe is on the goal. Else, return false.
+        """
+        if self.current_step != self.max_steps:
+            raise RuntimeError("This episode is either over or still ongoing.")
+        elif self.out_of_bounds:
+            return False
+        else:
+            # Define a tolerance which sets position and angle on target.
+            rel_tol = 0.1
+            final_pos = self.probe.get_focal_point_pos()
+            final_angle = self.probe.angle        
+            goal_pos = self.phantom.get_main_object().belly.pos
+            goal_angle = self.phantom.get_main_object().angle
+            
+            return np.allclose([final_pos, final_angle], [goal_pos, goal_angle], rtol=rel_tol)
 
     def _render_to_array(self, views):
         fig = plt.figure(figsize=(4, 4), dpi=200)

@@ -39,8 +39,7 @@ class Probe:
         """
         return copy_and_apply(
             self, deep=True,
-            angle=(self.angle+angle+180)%360-180)
-
+            angle=(self.angle+angle)%360)
 
     def change_focal_depth(self, delta_y):
         """
@@ -153,5 +152,10 @@ class ImagingSystem:
         data = signal.medfilt(data, kernel_size=self.median_filter_size)
         data = data-data.min()
         data = data/data.max()
+
+        """
+        from skimage import io
+        io.imsave('test.jpg', data)
+        """
         return data
 

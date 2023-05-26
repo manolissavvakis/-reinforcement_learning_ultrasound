@@ -1,5 +1,6 @@
 import numpy as np
 from matplotlib import pyplot as plt
+from agents.plot_obs_conf_map import plot_confidence_map
 
 from envs.logger import TrajectoryLogger
 from envs.focal_point_task_us_env import FocalPointTaskUsEnv
@@ -156,7 +157,58 @@ def test_moving_probe_works():
     env.step(3) # up
 
 
-def test_rewards():
+def test_rewards_1():
+    """
+    Test reward gained if agent steps out of bounds.
+    """
+    trajactory_logger = TrajectoryLogger(
+        #log_dir=sys.argv[1],
+        log_dir = LOG_DIR,
+        log_action_csv_freq=10,
+        log_state_csv_freq=10,
+        log_state_render_freq=10
+    )
+    probe = Probe(
+        pos=np.array([-20 / 1000, 0, 0]), # only X and Y
+        angle=0,
+        width=40 / 1000,
+        height=10 / 1000,
+        focal_depth=10 / 1000
+    )
+    probe_generator = ConstProbeGenerator(probe)
+
+    env = plane_task_env_fn(trajactory_logger, probe_generator=probe_generator)
+    env.reset()
+    env.step(1) # left - BUMP
+
+def test_rewards_2():
+    """
+    Test reward gained if probe's angle is out of boundaries.
+    """
+    trajactory_logger = TrajectoryLogger(
+        #log_dir=sys.argv[1],
+        log_dir = LOG_DIR,
+        log_action_csv_freq=10,
+        log_state_csv_freq=10,
+        log_state_render_freq=10
+    )
+    probe = Probe(
+        pos=np.array([0 / 1000, 0, 0]), # only X and Y
+        angle=20,
+        width=40 / 1000,
+        height=10 / 1000,
+        focal_depth=30 / 1000
+    )
+    probe_generator = ConstProbeGenerator(probe)
+
+    env = plane_task_env_fn(trajactory_logger, probe_generator=probe_generator)
+    env.reset()
+    env.step(4) # 40 deg
+
+def test_rewards_3():
+    """
+    Test reward gained if probe's angle is in angle range and inside phantom.
+    """
     trajactory_logger = TrajectoryLogger(
         #log_dir=sys.argv[1],
         log_dir = LOG_DIR,
@@ -173,13 +225,10 @@ def test_rewards():
     )
     probe_generator = ConstProbeGenerator(probe)
 
-    env = focal_point_env_fn(trajactory_logger, probe_generator=probe_generator)
+    env = plane_task_env_fn(trajactory_logger, probe_generator=probe_generator)
     env.reset()
-    env.step(1) # left
-    env.step(2) # right
-    env.step(4) # down
-    env.step(3) # up
-
+    env.step(4) # 20 deg
+    env.step(2) # RIGHT
 
 def test_nop():
     trajactory_logger = TrajectoryLogger(
@@ -206,6 +255,9 @@ def test_nop():
 
 
 def test_cannot_move_probe_outside_phantom_area():
+    """
+    Should raise an error if out_of_bounds mode is set.
+    """
     trajactory_logger = TrajectoryLogger(
         #log_dir=sys.argv[1],
         log_dir = LOG_DIR,
@@ -624,6 +676,7 @@ def test_random_probe_generator_with_angle():
         phantom_generator=phantom_generator,
         rot_deg=10,
     )
+    
     env.reset()
     env.step(0) # left
     env.reset()
@@ -637,15 +690,186 @@ def test_random_probe_generator_with_angle():
     env.reset()
     env.step(3)
 
+def test_step_reduction_1():
+    trajactory_logger = TrajectoryLogger(
+        log_dir = LOG_DIR,
+        log_action_csv_freq=1,
+        log_state_csv_freq=1,
+        log_state_render_freq=1
+    )
+    probe = Probe(
+        pos=np.array([0 / 1000, 0, 0]), # only X and Y
+        angle=0,
+        width=40 / 1000,
+        height=10 / 1000,
+        focal_depth=50 / 1000
+    )
+    teddy = Teddy(
+        belly_pos=np.array([0 / 1000, 0, 50 / 1000]), # X, Y, Z
+        scale=12 / 1000,
+        head_offset=.9
+    )
+    phantom = ScatterersPhantom(
+            objects=[teddy],
+            x_border=(-40 / 1000, 40 / 1000),
+            y_border=(-40 / 1000, 40 / 1000),
+            z_border=(0, 90 / 1000),
+            n_scatterers=int(1e4),
+            n_bck_scatterers=int(1e3),
+            seed=42,
+        )
+    phantom_generator = ConstPhantomGenerator(phantom)
+    probe_generator = ConstProbeGenerator(probe)
+
+    env = plane_task_env_fn(
+        trajactory_logger,
+        probe_generator=probe_generator,
+        phantom_generator=phantom_generator,
+    )
+    
+    env.reset()
+    env.step(4) # 20 deg
+    env.step(4) # 40 deg
+    env.step(4) # 60 deg
+    env.step(2) # (4mm, 0), step reduction
+
+
+def test_step_reduction_2():
+    trajactory_logger = TrajectoryLogger(
+        log_dir = LOG_DIR,
+        log_action_csv_freq=1,
+        log_state_csv_freq=1,
+        log_state_render_freq=1
+    )
+    probe = Probe(
+        pos=np.array([0 / 1000, 0, 0]), # only X and Y
+        angle=0,
+        width=40 / 1000,
+        height=10 / 1000,
+        focal_depth=50 / 1000
+    )
+    teddy = Teddy(
+        belly_pos=np.array([0 / 1000, 0, 50 / 1000]), # X, Y, Z
+        scale=12 / 1000,
+        head_offset=.9
+    )
+    phantom = ScatterersPhantom(
+            objects=[teddy],
+            x_border=(-40 / 1000, 40 / 1000),
+            y_border=(-40 / 1000, 40 / 1000),
+            z_border=(0, 90 / 1000),
+            n_scatterers=int(1e4),
+            n_bck_scatterers=int(1e3),
+            seed=42,
+        )
+    phantom_generator = ConstPhantomGenerator(phantom)
+    probe_generator = ConstProbeGenerator(probe)
+
+    env = plane_task_env_fn(
+        trajactory_logger,
+        probe_generator=probe_generator,
+        phantom_generator=phantom_generator,
+    )
+    
+    env.reset()
+    env.step(2) # (5mm, 0)
+    env.step(1) # (0, 0)
+    env.step(2) # (5mm, 0)
+    env.step(1) # (1mm, 0), step reduction
+
+def test_step_reduction_3():
+    trajactory_logger = TrajectoryLogger(
+        log_dir = LOG_DIR,
+        log_action_csv_freq=1,
+        log_state_csv_freq=1,
+        log_state_render_freq=1
+    )
+    probe = Probe(
+        pos=np.array([0 / 1000, 0, 0]), # only X and Y
+        angle=0,
+        width=40 / 1000,
+        height=10 / 1000,
+        focal_depth=50 / 1000
+    )
+    teddy = Teddy(
+        belly_pos=np.array([0 / 1000, 0, 50 / 1000]), # X, Y, Z
+        scale=12 / 1000,
+        head_offset=.9
+    )
+    phantom = ScatterersPhantom(
+            objects=[teddy],
+            x_border=(-40 / 1000, 40 / 1000),
+            y_border=(-40 / 1000, 40 / 1000),
+            z_border=(0, 90 / 1000),
+            n_scatterers=int(1e4),
+            n_bck_scatterers=int(1e3),
+            seed=42,
+        )
+    phantom_generator = ConstPhantomGenerator(phantom)
+    probe_generator = ConstProbeGenerator(probe)
+
+    env = plane_task_env_fn(
+        trajactory_logger,
+        probe_generator=probe_generator,
+        phantom_generator=phantom_generator,
+    )
+    
+    env.reset()
+    env.step(4) # 20 deg
+    env.step(4) # 40 deg
+    env.step(2) # (5mm, 0)
+    env.step(2) # (9mm, 0), step reduction, shouldn't decrease though
+
+def test_get_confidence_map():
+    trajactory_logger = TrajectoryLogger(
+        log_dir = LOG_DIR,
+        log_action_csv_freq=1,
+        log_state_csv_freq=1,
+        log_state_render_freq=1
+    )
+    probe = Probe(
+        pos=np.array([0 / 1000, 0, 0]), # only X and Y
+        angle=0,
+        width=40 / 1000,
+        height=10 / 1000,
+        focal_depth=50 / 1000
+    )
+    teddy = Teddy(
+        belly_pos=np.array([0 / 1000, 0, 50 / 1000]), # X, Y, Z
+        scale=12 / 1000,
+        head_offset=.9
+    )
+    phantom = ScatterersPhantom(
+            objects=[teddy],
+            x_border=(-40 / 1000, 40 / 1000),
+            y_border=(-40 / 1000, 40 / 1000),
+            z_border=(0, 90 / 1000),
+            n_scatterers=int(1e4),
+            n_bck_scatterers=int(1e3),
+        )
+    phantom_generator = ConstPhantomGenerator(phantom)
+    probe_generator = ConstProbeGenerator(probe)
+
+    env = plane_task_env_fn(
+        trajactory_logger,
+        probe_generator=probe_generator,
+        phantom_generator=phantom_generator,
+    )
+    env.reset()
+
+    from plot_obs_conf_map import plot_confidence_map
+    plot_confidence_map('/home/spbtu/Manolis_Files/Thesis_Project/rlus/episode_0/observation_step_000.png', env.confidence_maps[0], 'true')
 
 if __name__ == "__main__":
     #globals()[sys.argv[1]]()
 
-    # test_reset()
+    #test_reset()
     #test_moving_probe_works()
-    #test_rewards()
+    #test_rewards_1()
+    #test_rewards_2()
+    #test_rewards_3()
     #test_nop()
-    test_cannot_move_probe_outside_phantom_area()
+    #test_cannot_move_probe_outside_phantom_area()
     #test_caching_works()
     #test_random_probe_generator()
     #test_deep_focus()
@@ -656,4 +880,7 @@ if __name__ == "__main__":
     #test_rotate_2()
     #test_rotate_3()
     #test_random_probe_generator_with_angle()
-
+    #test_step_reduction_1()
+    #test_step_reduction_2()
+    #test_step_reduction_3()
+    test_get_confidence_map()
