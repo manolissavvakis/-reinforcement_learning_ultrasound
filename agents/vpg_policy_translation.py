@@ -23,7 +23,7 @@ N_WORKERS = 4
 
 def env_fn(trajectory_logger):
     probe = Probe(
-        pos=np.array([-20 / 1000, 0]), # only X and Y
+        pos=np.array([-20 / 1000, -5 / 1000, 0]), # only X and Y
         angle=0,
         width=40 / 1000,
         height=10 / 1000,
@@ -38,7 +38,7 @@ def env_fn(trajectory_logger):
         objects=[teddy],
         x_border=(-45 / 1000, 45 / 1000),
         y_border=(-45 / 1000, 45 / 1000),
-        z_border=(0, 90 / 1000),
+        z_border=(0, 100 / 1000),
         n_scatterers=int(1e4),
         n_bck_scatterers=int(1e3),
         seed=42,
@@ -47,8 +47,8 @@ def env_fn(trajectory_logger):
         c=1540,
         fs=100e6,
         image_width=40 / 1000,
-        image_height=90 / 1000,
-        image_resolution=(40, 90),  # [pixels]
+        image_height=100 / 1000,
+        image_resolution=(40, 100),  # [pixels]
         median_filter_size=5,
         dr_threshold=-200,
         dec=1,
@@ -64,6 +64,7 @@ def env_fn(trajectory_logger):
             object_to_align=teddy,
             seed=42,
             x_pos=np.arange(-25/1000, 29/1000, step=5/1000),
+            y_pos=np.arange(-25/1000, 29/1000, step=5/1000),
             focal_pos=[10/1000]
         ),
         max_steps=N_STEPS_PER_EPISODE,

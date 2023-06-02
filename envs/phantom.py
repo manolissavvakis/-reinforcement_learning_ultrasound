@@ -108,14 +108,11 @@ class Teddy:
 
         # Head.
         head_r = scale/2
-        #head_pos = self.belly.pos + [0, 0, -(self.belly.r * head_offset + head_r)]
         head_pos = np.add(self.belly.pos, [0, 0, -(self.belly.r * head_offset + head_r)])
-        #print(np.add(self.belly.pos, [0, 0, -(self.belly.r * head_offset + head_r)]))
         self.head = Ball(head_pos, r=head_r)
 
         # Paws.
         paw_r = scale/3
-        #paw_pos = self.belly.pos+[0, 0, -(self.belly.r * head_offset + paw_r)]
         paw_pos = np.add(self.belly.pos, [0, 0, -(self.belly.r * head_offset + paw_r)])
         self.paws = [
             Ball(pos=paw_pos, r=paw_r).rotate_xz(axis_pos=belly_pos, angle=45),
@@ -185,7 +182,6 @@ class Teddy:
         Args:
             ax: ax object
         """
-        color = 'r'
         self.belly.plot_mesh(ax, 'b')
         self.head.plot_mesh(ax, 'r')
         for paw in self.paws:

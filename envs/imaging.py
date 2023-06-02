@@ -9,7 +9,7 @@ class Probe:
         self.pos = np.array(pos)
         self.angle = angle
         self.width = width  # OX
-        self.height = height  # OY
+        self.height = height  # OZ
         self.focal_depth = focal_depth
 
     def translate(self, t):
@@ -41,19 +41,19 @@ class Probe:
             self, deep=True,
             angle=(self.angle+angle)%360)
 
-    def change_focal_depth(self, delta_y):
+    def change_focal_depth(self, delta_z):
         """
         Moves upwards/downwards a focal depth of the imaging system.
 
         Args:
-            delta_y: displacement of the focal point
+            delta_z: displacement of the focal point
 
         Returns:
             a probe with new position of the focal point
         """
         return copy_and_apply(
             self, deep=True,
-            focal_depth=self.focal_depth+delta_y)
+            focal_depth=self.focal_depth+delta_z)
 
     def get_focal_point_pos(self):
         """
@@ -152,10 +152,5 @@ class ImagingSystem:
         data = signal.medfilt(data, kernel_size=self.median_filter_size)
         data = data-data.min()
         data = data/data.max()
-
-        """
-        from skimage import io
-        io.imsave('test.jpg', data)
-        """
         return data
 

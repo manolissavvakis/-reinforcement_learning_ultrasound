@@ -25,7 +25,7 @@ N_WORKERS = 4
 
 def env_fn(trajectory_logger):
     probe = Probe(
-        pos=np.array([-20 / 1000, 0]), # only X and Y
+        pos=np.array([-20 / 1000, -5 / 1000, 0]),
         angle=0,
         width=40 / 1000,
         height=10 / 1000,
@@ -40,7 +40,7 @@ def env_fn(trajectory_logger):
         objects=[teddy],
         x_border=(-40 / 1000, 40 / 1000),
         y_border=(-40 / 1000, 40 / 1000),
-        z_border=(0, 90 / 1000),
+        z_border=(0, 100 / 1000),
         n_scatterers=int(1e4),
         n_bck_scatterers=int(1e3),
         seed=42,
@@ -49,8 +49,8 @@ def env_fn(trajectory_logger):
         c=1540,
         fs=100e6,
         image_width=40 / 1000,
-        image_height=90 / 1000,
-        image_resolution=(40, 90),  # [pixels]
+        image_height=100 / 1000,
+        image_resolution=(40, 100),  # [pixels]
         median_filter_size=5,
         dr_threshold=-200,
         dec=1,
@@ -64,6 +64,7 @@ def env_fn(trajectory_logger):
             object_to_align=teddy,
             seed=42,
             x_pos= np.arange(-15/1000, 19/1000, step=5/1000),
+            y_pos= np.arange(-15/1000, 19/1000, step=5/1000),
             focal_pos=[50/1000], # same as for Teddy
             angle=[45, 60, 75, 90]
         ),
@@ -75,50 +76,6 @@ def env_fn(trajectory_logger):
         rot_deg=15
     )
     return env
-"""
-AC_KWARGS = dict(
-    hidden_sizes=[16, 32],
-    activation=tf.nn.relu
-)
-
-# Below functions base on openai.spinup's A-C scheme implementation.
-def cnn(x, hidden_sizes=(32,), kernel_size=(3, 3), pool_size=(2, 2), output_activation=None):
-    x = tf.layers.batch_normalization(x)
-    for h in hidden_sizes[:-1]:
-        x = tf.layers.conv2d(x, filters=h, kernel_size=kernel_size)
-        x = tf.layers.batch_normalization(x)
-        x = tf.nn.tanh(x)
-        x = tf.layers.max_pooling2d(x, pool_size=pool_size, strides=pool_size)
-    x = tf.layers.flatten(x)
-
-    return tf.layers.dense(x, units=hidden_sizes[-1], activation=output_activation)
-
-# ---- Delete training_ph from cnn_categorical_policy and cnn
-def cnn_categorical_policy(x, a, hidden_sizes, output_activation, action_space):
-    act_dim = action_space.n
-    logits = cnn(x, hidden_sizes=list(hidden_sizes) + [act_dim], output_activation=None)
-    logp_all = tf.nn.log_softmax(logits)
-    pi = tf.squeeze(tf.multinomial(logits, 1), axis=1)  # action drawn from current policy
-    logp = tf.reduce_sum(tf.one_hot(a, depth=act_dim) * logp_all, axis=1)  # log probability of given actions
-    logp_pi = tf.reduce_sum(tf.one_hot(pi, depth=act_dim) * logp_all, axis=1)  # log probability of actions of given pi
-
-    return pi, logp, logp_pi
-
-def cnn_actor_critic(x, a, hidden_sizes, activation, output_activation=None, policy=None, action_space=None):
-    # default policy builder depends on action space
-    if policy is None and isinstance(action_space, Box):
-        policy = cnn_gaussian_policy
-    elif policy is None and isinstance(action_space, Discrete):
-        policy = cnn_categorical_policy
-
-    with tf.variable_scope('pi'):
-        #pi, logp, logp_pi, logp_all = policy(x, a, hidden_sizes, output_activation, action_space)
-        pi, logp, logp_pi = policy(x, a, hidden_sizes, output_activation, action_space)
-    with tf.variable_scope('v'):
-        v = tf.squeeze(cnn(x, hidden_sizes=list(hidden_sizes) + [1], output_activation=None), axis=1)
-
-    return pi, logp, logp_pi, v
-"""
 
 def main():
     matplotlib.use('agg')

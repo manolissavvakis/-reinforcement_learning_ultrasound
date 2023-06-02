@@ -33,11 +33,13 @@ class FocalPointTaskUsEnv(PhantomUsEnv):
 
     def _get_action_map(self):
         return {
-            0: (0, 0, 0),  # NOP
-            1: (-self.step_size, 0, 0),  # move to the left
-            2: (self.step_size,  0, 0),  # move to the right
-            3: (0, -self.step_size, 0),  # move upwards
-            4: (0,  self.step_size, 0),  # move downwards
+            0: (0, 0, 0, 0),  # NOP
+            1: (-self.step_size, 0, 0, 0),  # x axis movement to the left
+            2: (self.step_size,  0, 0, 0),  # x axis movement to the right
+            3: (0, -self.step_size,  0, 0), # y axis movement to the left
+            4: (0, self.step_size,  0, 0),  # y axis movement to the right
+            5: (0, 0, -self.step_size, 0),  # z axis move upwards
+            6: (0, 0, self.step_size, 0),   # z axis move downwards
         }
 
     def get_action_name(self, action_number):
@@ -47,22 +49,25 @@ class FocalPointTaskUsEnv(PhantomUsEnv):
         """
         return {
             0: "NOP",
-            1: "LEFT",
-            2: "RIGHT",
-            3: "UP",
-            4: "DOWN",
+            1: "X_NEG",
+            2: "X_POS",
+            3: "Y_NEG",
+            4: "Y_POS",
+            5: "Z_NEG",
+            6: "Z_POS",
         }.get(action_number, None)
 
     def _perform_action(self, action):
-        x_t, z_t, theta_t = self._get_action(action)
-        _LOGGER.debug("Moving the probe: %s" % str((x_t, z_t, theta_t)))
-        self._move_focal_point_if_possible(x_t, z_t)
+        x_t, y_t, z_t, theta_t = self._get_action(action)
+        _LOGGER.debug("Moving the probe: %s" % str((x_t, y_t, z_t, theta_t)))
+        self._move_focal_point_if_possible(x_t, y_t, z_t)
 
     def get_error(self):
-        dx, dz = self._get_pos_diff()  
-        x = dx/self.phantom.x_border[1]
-        z = dz/self.phantom.z_border[1]/2
-        error = 1/2 * np.sum(np.power([x, z], 2))
+        dx, dy, dz = self._get_pos_diff()  
+        x = dx/(self.phantom.x_border[1]/2)
+        y = dy/(self.phantom.y_border[1]/2)
+        z = dz/(self.phantom.get_main_object().belly.pos[2])
+        error = 1/3 * np.sum(np.power([x, y, z], 2))
         return error
 
     def _update_state(self):

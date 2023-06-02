@@ -38,21 +38,9 @@ def _get_cumulative_angle_diff(ep_dir, aggr="sum"):
     ret = AGGR[aggr](ret)
     return ret
 
-
 def _compute_mean_std(values, window_size):
     
     mean, std = [], []
-    y = np.ones(window_size)
-
-# --- Add these lines to plot mean reward to epochs
-# -----
-    episodes_per_epoch = 4
-    temp_values = []
-    for i in range(0, len(values), episodes_per_epoch):
-        temp_values.append(np.mean(values[i:i+episodes_per_epoch]))
-    values = temp_values
-# -----
-
     if window_size % 2:
         rn = range(-(window_size//2), len(values)-(window_size//2))
     else:
@@ -65,23 +53,9 @@ def _compute_mean_std(values, window_size):
     x = np.arange(0, len(values))
 
     mean, std = np.array(mean), np.array(std)
+    return x, mean, std
     assert len(x) == len(mean) == len(std)
     return x, mean, std
-
-    # print("Mean")
-    # print(mean.tolist())
-    # print("Std")
-    # print(std.tolist())
-    """
-    episodes_per_epoch = 4
-    for i in range(0, len(values), episodes_per_epoch):
-        mean.append(np.mean(values[i:i+episodes_per_epoch]))
-        std.append(np.std(values[i:i+episodes_per_epoch]))
-    mean, std = np.array(mean), np.array(std)
-    x = np.arange(0, len(values)//episodes_per_epoch)
-    assert len(x) == len(mean) == len(std)
-    """
-
 
 def plot_reward(
         exp_dir,
@@ -118,9 +92,6 @@ def plot_reward(
         for c in caplines:
             c.set_marker("_")
         ax.grid(linestyle="--")
-        # caplines[0].set_markersize(20)
-        # ax.plot(x, mean)
-        # ax.fill_between(x, mean - std, mean + std, alpha=0.2)
 
     if type == "reward":
         x, c_rewards_mean, c_rewards_std = _compute_mean_std(c_rewards, window_size)

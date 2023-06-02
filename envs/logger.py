@@ -36,7 +36,7 @@ class TrajectoryLogger:
         self.action_logger, self.state_logger = None, None
         self.state_render_loggers = []
 
-    def restart(self, env, episode_nr):
+    def restart(self, episode_nr):
         """
         Restarts trajectory recorder, creates all necessary resources
         required to save logs (directory tree structure, etc.).
@@ -59,7 +59,9 @@ class TrajectoryLogger:
                     "step",
                     "action_code",
                     "action_name",
-                    "reward"
+                    "reward",
+                    "error",
+                    "is_success"
                 ])
 
         if self.log_state_csv_freq:
@@ -69,9 +71,11 @@ class TrajectoryLogger:
                 log_file, fieldnames=[
                     "step",
                     "probe_x",
+                    "probe_y",
                     "probe_z",
                     "probe_angle",
                     "obj_x",
+                    "obj_y",
                     "obj_z",
                     "obj_angle",
                 ])
@@ -82,13 +86,15 @@ class TrajectoryLogger:
             for v in self.state_views:
                 self.state_render_loggers.append(UsPhantomEnvRenderLogger(episode_dir, v))
 
-    def log_action(self, episode, step, action_code, reward, action_name=None):
+    def log_action(self, episode, step, action_code, reward, action_name, error, is_success=None):
         if episode % self.log_action_csv_freq == 0:
             self.action_logger.log(
                 step=step,
                 action_code=action_code,
                 action_name=action_name,
-                reward=reward
+                reward=reward,
+                error=error,
+                is_success=is_success
             )
 
     def log_state(self, episode, step, env):
@@ -105,7 +111,6 @@ class TrajectoryLogger:
         if episode % self.log_state_render_freq == 0:
             for logger in self.state_render_loggers:
                 logger.log(step, env)
-
 
 class CSVLogger:
     def __init__(self, output_file, fieldnames):
@@ -137,4 +142,3 @@ class UsPhantomEnvRenderLogger:
         img = Image.fromarray(r, mode="RGB")
         img.save(os.path.join(self.output_dir, "%s_step_%03d.png" % (self.view, step)),
                  dpi=(300,300), optimize=False, compress_level=1)
-

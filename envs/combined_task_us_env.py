@@ -1,4 +1,4 @@
-from us_env import PhantomUsEnv
+from envs.us_env import PhantomUsEnv
 from gym import spaces
 import logging
 import numpy as np
@@ -21,27 +21,27 @@ class CombinedTaskUsEnv(PhantomUsEnv):
         self.max_probe_disrot = max_probe_disrotation
         self.max_probe_dislocation = max_probe_dislocation
         self.probe_dislocation_prob = probe_dislocation_prob
-        self.action_space = spaces.Discrete(len(self._get_action_map()))
         if dislocation_seed:
             self.dislocation_rng = random.Random(dislocation_seed)
         else:
             self.dislocation_rng = None
 
     def _perform_action(self, action):
-        x_t, z_t, theta_t = self._get_action(action)
-        _LOGGER.debug("Executing action: %s" % str((x_t, z_t, theta_t)))
-        self._move_focal_point_if_possible(x_t, z_t)
+        x_t, y_t, z_t, theta_t = self._get_action(action)
+        _LOGGER.debug("Executing action: %s" % str((x_t, y_t, z_t, theta_t)))
+        self._move_focal_point_if_possible(x_t, y_t, z_t)
         p = self.probe.rotate(theta_t)
         if self.angle_range is None or self._is_in_angle_range(p.angle):
             self.probe = p
     
     def get_error(self):
-        dx, dz = self._get_pos_diff()  
+        dx, dy, dz = self._get_pos_diff()  
         dtheta = self._get_angle_diff()
-        x = dx/self.phantom.x_border[1]
-        z = dz/self.phantom.z_border[1]/2
+        x = dx/(self.phantom.x_border[1]/2)
+        y = dy/(self.phantom.y_border[1]/2)
+        z = dz/(self.phantom.get_main_object().belly.pos[2])
         theta = np.sin(np.radians(dtheta/2))
-        error = 1/3 * np.sum(np.power([x, z, theta], 2))
+        error = 1/4 * np.sum(np.power([x, y, z, theta], 2))
         return error
         
     def _is_in_angle_range(self, angle):
@@ -52,7 +52,6 @@ class CombinedTaskUsEnv(PhantomUsEnv):
         if self.dislocation_rng and self.dislocation_rng.random() < self.probe_dislocation_prob:
             # Add noise depending on which plane the action is taken.
             if self._get_action() == 1 or 2:
-                # Dislocate probe on along OX axis.
                 x_dislocation = self.dislocation_rng.choice(list(range(1, self.max_probe_dislocation+1)))
                 x_dislocation *= self.step_size
                 self._move_focal_point_if_possible(x_t=x_dislocation, z_t=0)

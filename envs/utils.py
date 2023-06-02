@@ -2,6 +2,7 @@ import copy
 import json
 import jsonpickle
 import shutil
+import os
 
 def copy_and_apply(src, deep=False, **kwargs):
     if deep:
@@ -14,7 +15,7 @@ def copy_and_apply(src, deep=False, **kwargs):
 
 def to_string(obj):
     return jsonpickle.encode(obj)
-"""
+
 def convert_json(obj):
     #Convert obj to a version which can be serialized with JSON.
     if is_json_serializable(obj):
@@ -46,15 +47,19 @@ def is_json_serializable(v):
         return True
     except:
         return False
-"""
-        
+
 def load_last_model(fpath):
-    if os.path.exists(fpath):
+    if not os.path.exists(fpath):
+        itr = 0
+    else:
         # Checkpoint are saved as rl_model_XXXXXX_steps.zip
         checkpoints = [int(x[9:-10]) for x in os.listdir(fpath) if x.endswith('.zip')]
-        itr = max(checkpoints)
-    else:
-        itr = 0
+        if not len(checkpoints):
+            itr = 0
+            traj_dir = os.path.join(os.path.dirname(fpath), 'trajectory_logger')
+            delete_trajectory__files(traj_dir, itr)
+        else:
+            itr = max(checkpoints)
         
     return itr
 

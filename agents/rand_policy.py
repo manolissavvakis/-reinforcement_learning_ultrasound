@@ -60,7 +60,7 @@ if __name__ == '__main__':
     phantom_generator = ConstPhantomGenerator(phantom)
 
     probe = Probe(
-        pos=np.array([0 / 1000, 0, 0]), # only X and Y
+        pos=np.array([0 / 1000, 0 / 1000, 0]),
         angle=0,
         width=40 / 1000,
         height=10 / 1000,

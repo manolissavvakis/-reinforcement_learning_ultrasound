@@ -40,12 +40,13 @@ class PlaneTaskUsEnv(PhantomUsEnv, EzPickle):
 
     def _get_action_map(self):
         return {
-            # x, y, theta
-            0: (0, 0, 0),  # NOP
-            1: (-self.step_size, 0, 0),
-            2: (self.step_size,  0, 0),
-            3: (0, 0, -self.rot_deg),
-            4: (0, 0, self.rot_deg),
+            0: (0, 0, 0, 0),  # NOP
+            1: (-self.step_size, 0, 0, 0),  # x axis movement to the left
+            2: (self.step_size,  0, 0, 0),  # x axis movement to the right
+            3: (0, -self.step_size,  0, 0), # y axis movement to the left
+            4: (0, self.step_size,  0, 0),  # y axis movement to the right
+            5: (0, 0, 0, -self.rot_deg),    # clockwise rotation
+            6: (0, 0, 0, self.rot_deg)      # counter-clockwise rotation
         }
 
     def get_action_name(self, action_number):
@@ -55,26 +56,28 @@ class PlaneTaskUsEnv(PhantomUsEnv, EzPickle):
         """
         return {
             0: "NOP",
-            1: "LEFT",
-            2: "RIGHT",
-            3: "ROT_C",
-            4: "ROT_CC",
+            1: "X_NEG",
+            2: "X_POS",
+            3: "Y_NEG",
+            4: "Y_POS",
+            5: "ROT_C",
+            6: "ROT_CC",
         }.get(action_number, None)
 
     def _perform_action(self, action):
-        x_t, _, theta_t = self._get_action(action)
-        z_t = 0
-        _LOGGER.debug("Executing action: %s" % str((x_t, z_t, theta_t)))
-        self._move_focal_point_if_possible(x_t, z_t)
+        x_t, y_t, z_t, theta_t = self._get_action(action)
+        _LOGGER.debug("Executing action: %s" % str((x_t, y_t, z_t, theta_t)))
+        self._move_focal_point_if_possible(x_t, y_t, z_t)
         p = self.probe.rotate(theta_t)
         self.probe = p
         
     def get_error(self):
-        dx, _ = self._get_pos_diff()  
+        dx, dy, _ = self._get_pos_diff()  
         dtheta = self._get_angle_diff()
-        x = dx/self.phantom.x_border[1]
+        x = dx/(self.phantom.x_border[1]/2)
+        y = dy/(self.phantom.y_border[1]/2)
         theta = np.sin(np.radians(dtheta/2))
-        error = 1/2 * np.sum(np.power([x, theta], 2))
+        error = 1/3 * np.sum(np.power([x, y, theta], 2))
         return error
 
     def _update_state(self):

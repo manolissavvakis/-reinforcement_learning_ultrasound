@@ -42,10 +42,9 @@ class ConstProbeGenerator(ProbeGenerator):
     def get_next_probe(self):
         return self.probe
 
-
 class RandomProbeGenerator(ProbeGenerator):
     def __init__(self, ref_probe, object_to_align, seed=None,
-                 x_pos=None, focal_pos=None, angle=None):
+                 x_pos=None, y_pos=None, focal_pos=None, angle=None):
         super().__init__()
         self.ref_probe = ref_probe
         self.object_to_align = object_to_align
@@ -53,8 +52,12 @@ class RandomProbeGenerator(ProbeGenerator):
             self.x_pos = [i/1000 for i in range(-20, 30, 10)]
         else:
             self.x_pos = x_pos
+        if y_pos is None:
+            self.y_pos = [i/1000 for i in range(-20, 30, 10)]
+        else:
+            self.y_pos = y_pos
         if focal_pos is None:
-            self.focal_pos = [i/1000 for i in range(10, 90, 10)]
+            self.focal_pos = [i/1000 for i in range(10, 100, 10)]
         else:
             self.focal_pos = focal_pos
         if angle is None:
@@ -65,13 +68,10 @@ class RandomProbeGenerator(ProbeGenerator):
 
     def get_next_probe(self):
         x = self.rng.choice(self.x_pos)
+        y = self.rng.choice(self.y_pos)
         fd = self.rng.choice(self.focal_pos)
         a = self.rng.choice(self.angle)
-        probe_pos = np.array([
-            x,
-            self.object_to_align.get_pos()[1],
-            0
-        ])
+        probe_pos = np.array([x, y, 0])
         return copy_and_apply(
             self.ref_probe, deep=True,
             pos=probe_pos,

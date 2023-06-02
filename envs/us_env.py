@@ -41,7 +41,9 @@ class PhantomUsEnv(gym.Env):
         self.imaging = imaging
         self.max_steps = max_steps
         self.step_size = step_size
+        self.initial_step = step_size
         self.rot_deg = rot_deg
+        self.initial_rot = rot_deg
         self.current_step = 0
         self.current_episode = -1
         # To reduce the number of calls to FieldII, we store lastly seen
@@ -51,7 +53,6 @@ class PhantomUsEnv(gym.Env):
         self.last_distance = None
         self.last_error = None
         self.distance_list = []
-        info = {"is_success": None}
 
         self.field_session = Field2(no_workers=no_workers)
         self.use_cache = use_cache
@@ -79,14 +80,17 @@ class PhantomUsEnv(gym.Env):
         _LOGGER.debug("Observations space: %s" % repr(self.observation_space))
 
     def _get_action_map(self):
+        # (x, y, z, theta)
         return {
-            0: (0, 0, 0),  # NOP
-            1: (-self.step_size, 0, 0),  # move to the left
-            2: (self.step_size,  0, 0),  # move to the right
-            3: (0, -self.step_size, 0),  # move upwards
-            4: (0,  self.step_size, 0),  # move downwards
-            5: (0, 0, -self.rot_deg),
-            6: (0, 0,  self.rot_deg)
+            0: (0, 0, 0, 0),  # NOP
+            1: (-self.step_size, 0, 0, 0),  # x axis movement to the left
+            2: (self.step_size,  0, 0, 0),  # x axis movement to the right
+            3: (0, -self.step_size,  0, 0), # y axis movement to the left
+            4: (0, self.step_size,  0, 0),  # y axis movement to the right
+            5: (0, 0, -self.step_size, 0),  # z axis move upwards
+            6: (0, 0, self.step_size, 0),   # z axis move downwards
+            7: (0, 0, 0, -self.rot_deg),    # clockwise rotation
+            8: (0, 0, 0, self.rot_deg)      # counter-clockwise rotation
         }
 
     def _get_action(self, action_number):
@@ -100,12 +104,14 @@ class PhantomUsEnv(gym.Env):
         """
         return {
             0: "NOP",
-            1: "LEFT",
-            2: "RIGHT",
-            3: "UP",
-            4: "DOWN",
-            5: "ROT_C",
-            6: "ROT_CC"
+            1: "X_NEG",
+            2: "X_POS",
+            3: "Y_NEG",
+            4: "Y_POS",
+            5: "Z_NEG",
+            6: "Z_POS",      
+            7: "ROT_C",
+            8: "ROT_CC"
         }.get(action_number, None)
 
     def reset(self):
@@ -119,7 +125,9 @@ class PhantomUsEnv(gym.Env):
         self.phantom = next(self.phantom_generator)
         self.probe = next(self.probe_generator)
         self.out_of_bounds = False
-        self.last_distance = self._get_distance()
+        self.step_size = self.initial_step
+        self.rot_deg = self.initial_rot
+        self.distance_list = []
         self.last_error = self.get_error()
         self.current_step = 0
         self.current_episode += 1
@@ -127,8 +135,7 @@ class PhantomUsEnv(gym.Env):
         self.current_observation = o
 
         if self.trajectory_logger is not None:
-            self.trajectory_logger.restart(self,
-                                           episode_nr=self.current_episode)
+            self.trajectory_logger.restart(episode_nr=self.current_episode)
             self.trajectory_logger.log_state(
                 episode=self.current_episode,
                 step=self.current_step,
@@ -145,12 +152,12 @@ class PhantomUsEnv(gym.Env):
             observation, reward, is episode over?, diagnostic info (currently empty dict)
         """
         # perform action -> compute reward -> _update_state() -> get_observation -> log state
-        if self._check_termination_conditions():
+        if self._check_termination_conditions()[0]:
             raise RuntimeError("This episode is over, reset the environment.")
         self.current_step += 1
         self._perform_action(action)
         o = self._get_observation()
-
+        
         reward = self._get_reward()
         self._check_distance_list()
         # Update current state independently to the action
@@ -158,6 +165,7 @@ class PhantomUsEnv(gym.Env):
         self._update_state()
 
         self.current_observation = o
+        info = dict(is_success = None)
         episode_over, info["is_success"] = self._check_termination_conditions()
 
         if self.trajectory_logger is not None:
@@ -166,7 +174,9 @@ class PhantomUsEnv(gym.Env):
                 step=self.current_step,
                 action_code=action,
                 reward=reward,
-                action_name=self.get_action_name(action)
+                action_name=self.get_action_name(action),
+                error=self.last_error,
+                is_success=info["is_success"]
             )
             self.trajectory_logger.log_state(
                 episode=self.current_episode,
@@ -200,9 +210,11 @@ class PhantomUsEnv(gym.Env):
     def get_state_desc(self):
         return {
             "probe_x": self.probe.pos[0],
+            "probe_y": self.probe.pos[1],
             "probe_z": self.probe.focal_depth,
             "probe_angle": self.probe.angle,
             "obj_x": self.phantom.get_main_object().belly.pos[0],
+            "obj_y": self.phantom.get_main_object().belly.pos[1],
             "obj_z": self.phantom.get_main_object().belly.pos[2],
             "obj_angle": self.phantom.get_main_object().angle
         }
@@ -216,7 +228,7 @@ class PhantomUsEnv(gym.Env):
             reward_clipped = 1 - (e/e_thresh) if e<=e_thresh else 0
             
             a_p, a_r = 0.5, 0.2
-            if not math.isclose(e, self.last_error, rel_told = 1e-3):
+            if not math.isclose(e, self.last_error, rel_tol = 1e-3):
                 if e > self.last_error:
                     reward_hint = -a_p
                 else:
@@ -225,8 +237,10 @@ class PhantomUsEnv(gym.Env):
                 reward_hint = 0
 
             self.last_error = e
+            """  
+            delta_quality = self._get_quality_improvement()
+            """
             reward = reward_clipped + reward_hint
-            
             return reward
 
     def _update_state(self):
@@ -239,17 +253,17 @@ class PhantomUsEnv(gym.Env):
         raise NotImplementedError
 
     def _perform_action(self, action):
-        x_t, z_t, theta_t = self._get_action(action)
-        _LOGGER.debug("Executing action: %s" % str((x_t, z_t, theta_t)))
-        self._move_focal_point_if_possible(x_t, z_t)
+        x_t, y_t, z_t, theta_t = self._get_action(action)
+        _LOGGER.debug("Executing action: %s" % str((x_t, y_t, z_t, theta_t)))
+        self._move_focal_point_if_possible(x_t, y_t, z_t)
         self.probe = self.probe.rotate(theta_t)
     
     def _get_pos_diff(self):    
         # Position in the current timestep.
-        x_t, _, z_t = self.probe.get_focal_point_pos()
+        x_t, y_t, z_t = self.probe.get_focal_point_pos()
         # Position of the goal.
-        x_g, _, z_g = self.phantom.get_main_object().belly.pos
-        return x_t - x_g, z_t - z_g
+        x_g, y_g, z_g = self.phantom.get_main_object().belly.pos
+        return x_t - x_g, y_t - y_g, z_t - z_g
         
     def _get_angle_diff(self):
         # Angle in the current timestep.
@@ -263,11 +277,14 @@ class PhantomUsEnv(gym.Env):
         distance = np.sqrt(np.sum(np.power(delta_xyz, 2)))
         return distance
 
-    def _move_focal_point_if_possible(self, x_t, z_t):
+    def _move_focal_point_if_possible(self, x_t, y_t, z_t):
         pr_pos_x_l = (self.probe.pos[0] - self.probe.width/2) + x_t
         pr_pos_x_r = (self.probe.pos[0] + self.probe.width/2) + x_t
+        pr_pos_y_l = (self.probe.pos[1] - self.probe.height/2) + y_t
+        pr_pos_y_r = (self.probe.pos[1] + self.probe.height/2) + y_t
         pr_pos_z = self.probe.focal_depth + z_t
         x_border_l, x_border_r = self.phantom.x_border
+        y_border_l, y_border_r = self.phantom.y_border
         z_border_l, z_border_r = self.phantom.z_border
 
         # TODO consider storing Decimals or mms directly.
@@ -282,61 +299,62 @@ class PhantomUsEnv(gym.Env):
         if le(x_border_l, pr_pos_x_l) and ge(x_border_r, pr_pos_x_r):
             self.probe = self.probe.translate(np.array([x_t, 0, 0]))
         else:
+            self.out_of_bounds = True
+        if le(y_border_l, pr_pos_y_l) and ge(y_border_r, pr_pos_y_r):
+            self.probe = self.probe.translate(np.array([0, y_t, 0]))
+        else:
             self.out_of_bounds = True 
         if le(z_border_l, pr_pos_z) and ge(z_border_r, pr_pos_z):
             self.probe = self.probe.change_focal_depth(z_t)
         else:
             self.out_of_bounds = True
 
-    def _get_available_x_pos(self):
-        x_border = self.phantom.x_border
-        probe_margin = self.probe.width/2
-        return x_border[0]+probe_margin, x_border[1]-probe_margin
-
-    def _get_available_z_pos(self):
-        return self.phantom.z_border
-
     def _get_observation(self):
         if self.use_cache:
             return self._get_cached_observation()
         else:
-            return self._get_image()  
+            return self._get_image()   
 
     def _get_cached_observation(self):
         # Assumes, that objects in the phantom does not move (are 'static').
         state = (
             int(round(self.probe.pos[0], 3)*1e3),
+            int(round(self.probe.pos[1], 3)*1e3),
             int(round(self.probe.focal_depth, 3)*1e3),
             int(round(self.probe.angle))
         )
         if state in self._cache:
-            _LOGGER.info("Using cached value for probe state (x, z, theta)=%s"
+            _LOGGER.info("Using cached value for probe state (x, y, z, theta)=%s"
                           % str(state))
         else:
             bmode = self._get_image()
             self._cache[state] = bmode
-        return self._cache[state]     
+        return self._cache[state]
 
     def _check_distance_list(self):
         """
-        Check if the distance from the goal for 3 consecutive actions
+        Check if the distance from the goal for 4 consecutive actions
         is less than a threshold. If that's true, reduce the step size.
         This function is called after an action is taken (not in env.reset()).
-        Collect distances in a list, if there are 2 elements, compare them.
-        If the difference < threshold, check if the difference between the last
-        element and the distance collected from the last step meets the condition.
+        Collect distances in a list, calculate their pairwise differences and
+        then, if they are less than a rel_tol, reduce the step size. 
         """
-        if len(self.distance_list) < 2:
-            self.distance_list.append(self.last_distance)        
-        elif len(self.distance_list) == 2:
-            if not math.isclose(self.distance_list[0], self.distance_list[1], abs_tol=0.01):
-                self.distance_list = [self.distance_list[1], self.last_distance]
-            elif math.isclose(self.distance_list[1], self.last_distance, abs_tol=0.01):
-                self.step_size -= 2/1000
-                self.rot_deg -= 2
+        self.last_distance = self._get_distance()
+        if len(self.distance_list) < 3:
+            self.distance_list.append(self.last_distance)
+        elif len(self.distance_list) == 3:
+            d_distance = np.subtract(self.distance_list, self.distance_list[1:] + [self.last_distance])
+            d_distance = np.abs(d_distance)
+            step_red = True
+            for i in range(d_distance.size-1):
+                if not math.isclose(d_distance[i], d_distance[i+1], rel_tol=0.1) and step_red:
+                    self.distance_list = self.distance_list[i:]
+                    self.distance_list.append(self.last_distance)
+                    step_red = False
+            if step_red:
+                self.step_size -= self.initial_step/5
+                self.rot_deg -= int(self.initial_rot/5)
                 self.distance_list.clear()
-            else:
-                self.distance_list = self.last_distance
 
     def _check_termination_conditions(self):
         """
@@ -347,7 +365,8 @@ class PhantomUsEnv(gym.Env):
         3) Action step has reached zero.
         In addition, if episode's over, check if it reached the goal pose.
         """
-        if self.current_step >= self.max_steps or self.out_of_bounds or math.isclose(self.step_size, 0., abs_tol= 0.01):
+        episode_over = False
+        if self.current_step >= self.max_steps or self.out_of_bounds or math.isclose(self.step_size, 0., abs_tol= 0.001):
             episode_over = True
         if not episode_over:
             success = None
@@ -374,10 +393,10 @@ class PhantomUsEnv(gym.Env):
         Returns true if the position and angle of the
         probe is on the goal. Else, return false.
         """
-        if self.current_step != self.max_steps:
-            raise RuntimeError("This episode is either over or still ongoing.")
-        elif self.out_of_bounds:
+        if self.out_of_bounds:
             return False
+        elif self.current_step != self.max_steps:
+            return None
         else:
             # Define a tolerance which sets position and angle on target.
             rel_tol = 0.1
@@ -386,7 +405,7 @@ class PhantomUsEnv(gym.Env):
             goal_pos = self.phantom.get_main_object().belly.pos
             goal_angle = self.phantom.get_main_object().angle
             
-            return np.allclose([final_pos, final_angle], [goal_pos, goal_angle], rtol=rel_tol)
+            return np.allclose(np.append(final_pos, final_angle), np.append(goal_pos, goal_angle), rtol=rel_tol)
 
     def _render_to_array(self, views):
         fig = plt.figure(figsize=(4, 4), dpi=200)
@@ -396,9 +415,7 @@ class PhantomUsEnv(gym.Env):
              ("reward: %.2f", self._get_reward())
         ]
         title_elements = [el[0] % el[1] for el in title_elements if el[1] is not None]
-        title = ", ".join(title_elements)
-        #fig.suptitle(title)
-
+        
         view_handlers = {
             'env': self._plot_env,
             'observation': self._plot_bmode
@@ -435,8 +452,7 @@ class PhantomUsEnv(gym.Env):
         ax.set_xlim(self.phantom.x_border)
         ax.set_ylim(self.phantom.y_border)
         ax.set_zlim(self.phantom.z_border)
-        x_ticks = ax.get_xticks()
-
+        
         def mm_formatter_fn(x, pos):
             return "%.0f" % (x * 1000)
         mm_formatter = matplotlib.ticker.FuncFormatter(mm_formatter_fn)

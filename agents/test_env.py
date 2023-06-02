@@ -5,6 +5,7 @@ from agents.plot_obs_conf_map import plot_confidence_map
 from envs.logger import TrajectoryLogger
 from envs.focal_point_task_us_env import FocalPointTaskUsEnv
 from envs.plane_task_us_env import PlaneTaskUsEnv
+from envs.combined_task_us_env import CombinedTaskUsEnv
 from envs.phantom import (
     ScatterersPhantom,
     Ball,
@@ -17,9 +18,9 @@ from envs.generator import (
     ProbeGenerator,
     RandomProbeGenerator)
 
-N_STEPS_PER_EPISODE = 32
+N_STEPS_PER_EPISODE = 50
 N_WORKERS = 4
-LOG_DIR = '/home/spbtu/Manolis_Files/Thesis_Project/rlus'
+LOG_DIR = '/home/spbtu/Manolis_Files/Thesis_Project/rlus/test_env'
 
 IMAGING_SYSTEM = ImagingSystem(
         c=1540,
@@ -35,7 +36,7 @@ IMAGING_SYSTEM = ImagingSystem(
 DEFAULT_PHANTOM = ScatterersPhantom(
             objects=[
                 Teddy(
-                    belly_pos=np.array([0 / 1000, 0, 50 / 1000]), # X, Y, Z
+                    belly_pos=np.array([0 / 1000, 0 / 1000, 50 / 1000]), # X, Y, Z
                     scale=12 / 1000,
                     head_offset=.9
                 )
@@ -48,7 +49,6 @@ DEFAULT_PHANTOM = ScatterersPhantom(
             )
 DEFAULT_PHANTOM_GENERATOR = ConstPhantomGenerator(DEFAULT_PHANTOM)
 
-
 def focal_point_env_fn(trajectory_logger, probe_generator,
                        phantom_generator=None,
                        probe_dislocation_prob=None,
@@ -59,8 +59,6 @@ def focal_point_env_fn(trajectory_logger, probe_generator,
         phantom_generator = DEFAULT_PHANTOM_GENERATOR
     imaging = IMAGING_SYSTEM
     env = FocalPointTaskUsEnv(
-        dx_reward_coeff=1,
-        dz_reward_coeff=1,
         imaging=imaging,
         phantom_generator=phantom_generator,
         probe_generator=probe_generator,
@@ -82,14 +80,12 @@ def plane_task_env_fn(trajectory_logger, probe_generator,
                       dislocation_seed=None,
                       max_probe_disloc=None,
                       max_probe_disrot=None,
-                      step_size=5/1000,
-                      rot_deg=20):
+                      step_size=10/1000,
+                      rot_deg=10):
     if not phantom_generator:
         phantom_generator = DEFAULT_PHANTOM_GENERATOR
     imaging = IMAGING_SYSTEM
     return PlaneTaskUsEnv(
-        dx_reward_coeff=1,
-        angle_reward_coeff=1,
         imaging=imaging,
         phantom_generator=phantom_generator,
         probe_generator=probe_generator,
@@ -100,11 +96,37 @@ def plane_task_env_fn(trajectory_logger, probe_generator,
         step_size=step_size,
         rot_deg=rot_deg,
         probe_dislocation_prob=probe_dislocation_prob,
-        max_probe_disloc=max_probe_disloc,
-        max_probe_disrot=max_probe_disrot,
+        max_probe_dislocation=max_probe_disloc,
+        max_probe_disrotation=max_probe_disrot,
         dislocation_seed=dislocation_seed
     )
 
+def combined_task_env_fn(trajectory_logger, probe_generator,
+                      phantom_generator=None,
+                      probe_dislocation_prob=None,
+                      dislocation_seed=None,
+                      max_probe_disloc=None,
+                      max_probe_disrot=None,
+                      step_size=10/1000,
+                      rot_deg=10):
+    if not phantom_generator:
+        phantom_generator = DEFAULT_PHANTOM_GENERATOR
+    imaging = IMAGING_SYSTEM
+    return CombinedTaskUsEnv(
+        imaging=imaging,
+        phantom_generator=phantom_generator,
+        probe_generator=probe_generator,
+        max_steps=N_STEPS_PER_EPISODE,
+        no_workers=N_WORKERS,
+        use_cache=True,
+        trajectory_logger=trajectory_logger,
+        step_size=step_size,
+        rot_deg=rot_deg,
+        probe_dislocation_prob=probe_dislocation_prob,
+        max_probe_dislocation=max_probe_disloc,
+        max_probe_disrotation=max_probe_disrot,
+        dislocation_seed=dislocation_seed
+    )       
 
 def test_reset():
     """Test created to check a single observation/env state visualization."""
@@ -117,7 +139,7 @@ def test_reset():
         log_state_render_freq=10
     )
     probe = Probe(
-        pos=np.array([0 / 1000, 0, 0]), # only X and Y
+        pos=np.array([0/1000, 0/1000, 0]), # only X and Y
         angle=0,
         width=40 / 1000,
         height=10 / 1000,
@@ -137,25 +159,27 @@ def test_moving_probe_works():
         log_state_render_freq=10
     )
     probe = Probe(
-        pos=np.array([0 / 1000, 0, 0]), # only X and Y
+        pos=np.array([0/1000, 0/1000, 0]), # only X and Y
         angle=0,
         width=40 / 1000,
         height=10 / 1000,
         focal_depth=10 / 1000
     )
-    probe_generator = ConstProbeGenerator(probe)
+    probe_generator = ConstProbeGenerator(probe) 
 
     env = focal_point_env_fn(trajactory_logger, probe_generator=probe_generator)
     env.reset()
-    env.step(1) # left
-    env.step(1) # left
-    env.step(2) # right (should come from cache)
-    env.step(2) # right (should come from cache)
-    env.step(2) # right
-    env.step(4) # down
-    env.step(3) # up (cached)
-    env.step(3) # up
-
+    env.step(1) # X_NEG
+    env.step(1) # X_NEG
+    env.step(2) # X_POS (should come from cache)
+    env.step(2) # X_POS (should come from cache)
+    env.step(2) # X_POS
+    env.step(5) # Z_NEG
+    env.step(6) # Z_POS (cached)
+    env.step(6) # Z_POS
+    env.step(3) # Y_NEG
+    env.step(3) # Y_NEG
+    env.step(4) # Y_POS (cached)
 
 def test_rewards_1():
     """
@@ -164,12 +188,12 @@ def test_rewards_1():
     trajactory_logger = TrajectoryLogger(
         #log_dir=sys.argv[1],
         log_dir = LOG_DIR,
-        log_action_csv_freq=10,
-        log_state_csv_freq=10,
+        log_action_csv_freq=1,
+        log_state_csv_freq=1,
         log_state_render_freq=10
     )
     probe = Probe(
-        pos=np.array([-20 / 1000, 0, 0]), # only X and Y
+        pos=np.array([-20 / 1000, -20 / 1000, 0]), # only X and Y
         angle=0,
         width=40 / 1000,
         height=10 / 1000,
@@ -188,12 +212,12 @@ def test_rewards_2():
     trajactory_logger = TrajectoryLogger(
         #log_dir=sys.argv[1],
         log_dir = LOG_DIR,
-        log_action_csv_freq=10,
-        log_state_csv_freq=10,
+        log_action_csv_freq=1,
+        log_state_csv_freq=1,
         log_state_render_freq=10
     )
     probe = Probe(
-        pos=np.array([0 / 1000, 0, 0]), # only X and Y
+        pos=np.array([0 / 1000, 0 / 1000, 0]), # only X and Y
         angle=20,
         width=40 / 1000,
         height=10 / 1000,
@@ -203,7 +227,7 @@ def test_rewards_2():
 
     env = plane_task_env_fn(trajactory_logger, probe_generator=probe_generator)
     env.reset()
-    env.step(4) # 40 deg
+    env.step(5) # 10 deg
 
 def test_rewards_3():
     """
@@ -212,12 +236,12 @@ def test_rewards_3():
     trajactory_logger = TrajectoryLogger(
         #log_dir=sys.argv[1],
         log_dir = LOG_DIR,
-        log_action_csv_freq=10,
-        log_state_csv_freq=10,
+        log_action_csv_freq=1,
+        log_state_csv_freq=1,
         log_state_render_freq=10
     )
     probe = Probe(
-        pos=np.array([0 / 1000, 0, 0]), # only X and Y
+        pos=np.array([0 / 1000, 0 / 1000, 0]), # only X and Y
         angle=0,
         width=40 / 1000,
         height=10 / 1000,
@@ -227,8 +251,8 @@ def test_rewards_3():
 
     env = plane_task_env_fn(trajactory_logger, probe_generator=probe_generator)
     env.reset()
-    env.step(4) # 20 deg
-    env.step(2) # RIGHT
+    env.step(5) # 10 deg
+    env.step(2) # X_POS
 
 def test_nop():
     trajactory_logger = TrajectoryLogger(
@@ -261,12 +285,12 @@ def test_cannot_move_probe_outside_phantom_area():
     trajactory_logger = TrajectoryLogger(
         #log_dir=sys.argv[1],
         log_dir = LOG_DIR,
-        log_action_csv_freq=10,
-        log_state_csv_freq=10,
-        log_state_render_freq=10
+        log_action_csv_freq=1,
+        log_state_csv_freq=1,
+        log_state_render_freq=1
     )
     probe = Probe(
-        pos=np.array([-20 / 1000, 0, 0]), # only X and Y
+        pos=np.array([-20 / 1000, -20 / 1000, 0]), # only X and Y
         angle=0,
         width=40 / 1000,
         height=10 / 1000,
@@ -274,38 +298,46 @@ def test_cannot_move_probe_outside_phantom_area():
     )
     probe_generator = ConstProbeGenerator(probe)
 
-    env = plane_task_env_fn(trajactory_logger, probe_generator=probe_generator)
+    env = combined_task_env_fn(trajactory_logger, probe_generator=probe_generator)
     env.reset()
-    env.step(1) # left - BUMP
-    env.step(1) # right # -10
-    env.step(2) # right # 0
-    env.step(2) # right # 10
-    env.step(2) # right # 20
-    env.step(2) # right # 20 - BUMP
-    env.step(3) # up # 0
-    env.step(3) # up # 0 - BUMP
-    env.step(4) # down # 10
-    env.step(4) # down # 20
-    env.step(4) # down # 30
-    env.step(4) # down # 40
-    env.step(4) # down # 50
-    env.step(4) # down # 60
-    env.step(4) # down # 70
-    env.step(4) # down # 80
-    env.step(4) # down # 90
-    env.step(4) # down # 90 - BUMP
-
+    env.step(1) # X_NEG - BUMP
+    env.reset()
+    env.step(2) # X_POS 0
+    env.step(2) # X_POS 10
+    env.step(2) # X_POS 20
+    env.step(2) # X_POS - BUMP
+    env.reset()
+    env.step(3) # Y_NEG - BUMP
+    env.reset()
+    env.step(4) # Y_POS 0
+    env.step(4) # Y_POS 10
+    env.step(4) # Y_POS 20
+    env.step(4) # Y_POS - BUMP
+    env.reset()
+    env.step(5) # Z_NEG 0
+    env.step(5) # Z_NEG - BUMP
+    env.reset()
+    env.step(6) # Z_POS 10
+    env.step(6) # Z_POS 20
+    env.step(6) # Z_POS 30
+    env.step(6) # Z_POS 40
+    env.step(6) # Z_POS 50
+    env.step(6) # Z_POS 60
+    env.step(6) # Z_POS 70
+    env.step(6) # Z_POS 80
+    env.step(6) # Z_POS 90
+    env.step(6) # Z_POS - BUMP
 
 def test_caching_works():
     trajactory_logger = TrajectoryLogger(
         #log_dir=sys.argv[1],
         log_dir = LOG_DIR,
-        log_action_csv_freq=10,
-        log_state_csv_freq=10,
-        log_state_render_freq=10
+        log_action_csv_freq=1,
+        log_state_csv_freq=1,
+        log_state_render_freq=1
     )
     probe = Probe(
-        pos=np.array([0 / 1000, 0, 0]), # only X and Y
+        pos=np.array([0 / 1000, 0 / 1000, 0]), # only X and Y
         angle=0,
         width=40 / 1000,
         height=10 / 1000,
@@ -315,9 +347,8 @@ def test_caching_works():
 
     env = focal_point_env_fn(trajactory_logger, probe_generator=probe_generator)
     env.reset()
-    env.step(1) # left
-    env.step(2) # right (should come from cache)
-
+    env.step(1) # X_NEG
+    env.step(2) # X_POS (should come from cache)
 
 def test_random_probe_generator():
     trajactory_logger = TrajectoryLogger(
@@ -329,7 +360,7 @@ def test_random_probe_generator():
     )
 
     probe = Probe(
-        pos=np.array([0 / 1000, 0, 0]), # only X and Y
+        pos=np.array([0 / 1000, 0 / 1000, 0]), # only X and Y
         angle=0,
         width=40 / 1000,
         height=10 / 1000,
@@ -355,23 +386,23 @@ def test_random_probe_generator():
             ref_probe=probe,
             object_to_align=teddy,
             # x_pos default
+            # y_pos default
             # focal_pos default
         )
     env = focal_point_env_fn(trajactory_logger, probe_generator=probe_generator,
                              phantom_generator=phantom_generator)
     env.reset()
-    env.step(1) # left - BUMP
+    env.step(1) # X_NEG - BUMP
     env.reset()
-    env.step(2)
+    env.step(2) # X_POS
     env.reset()
-    env.step(3)
+    env.step(3) # Y_NEG
     env.reset()
-    env.step(3)
+    env.step(3) # Y_NEG
     env.reset()
-    env.step(1)
+    env.step(6) # Z_POS
     env.reset()
-    env.step(1)
-
+    env.step(5) # Z_NEG
 
 def test_deep_focus():
     trajactory_logger = TrajectoryLogger(
@@ -382,7 +413,7 @@ def test_deep_focus():
         log_state_render_freq=1
     )
     probe = Probe(
-        pos=np.array([0 / 1000, 0, 0]), # only X and Y
+        pos=np.array([0 / 1000, 0 / 1000, 0]), # only X and Y
         angle=0,
         width=40 / 1000,
         height=10 / 1000,
@@ -392,16 +423,15 @@ def test_deep_focus():
 
     env = focal_point_env_fn(trajactory_logger, probe_generator=probe_generator)
     env.reset()
-    env.step(4)  # down - 10
-    env.step(4)  # 20
-    env.step(4)  # 30
-    env.step(4)  # 40
-    env.step(4)  # 50
-    env.step(4)  # 60
-    env.step(4)  # 70
-    env.step(4)  # 80
-    env.step(4)  # 90
-
+    env.step(6)  # down - 10
+    env.step(6)  # 20
+    env.step(6)  # 30
+    env.step(6)  # 40
+    env.step(6)  # 50
+    env.step(6)  # 60
+    env.step(6)  # 70
+    env.step(6)  # 80
+    env.step(6)  # 90
 
 # probe random dislocations (focal point env)
 def test_random_dislocation_1():
@@ -483,7 +513,7 @@ def test_random_dislocation_2():
     env.step(2)
 
 
-def test_random_no_dislocation_2():
+def test_random_no_dislocation_3():
     """
     Check if dislocations are drawn, and are properly applicated (
     should not impact the last reward, should be observable in next state).
@@ -536,7 +566,7 @@ def test_rotate_1():
         log_state_render_freq=1
     )
     probe = Probe(
-        pos=np.array([0 / 1000, 0, 0]), # only X and Y
+        pos=np.array([0 / 1000, 0 / 1000, 0]), # only X and Y
         angle=0,
         width=40 / 1000,
         height=10 / 1000,
@@ -547,21 +577,21 @@ def test_rotate_1():
     env = plane_task_env_fn(trajactory_logger, probe_generator=probe_generator,
                             rot_deg=45)
     env.reset()
-    env.step(3)  # 45
-    env.step(3)  # 90
-    env.step(3)  # 135
-    env.step(3)  # 180
-    env.step(3)  # 225
-    env.step(3)  # 270
-    env.step(3)  # 315
-    env.step(3)  # 0
-    env.step(3)  # 45
-    env.step(4)  # should use cache
-    env.step(4)
-    env.step(4)
-    env.step(4)
-    env.step(4)
-    env.step(4)
+    env.step(5)  # 45
+    env.step(5)  # 90
+    env.step(5)  # 135
+    env.step(5)  # 180
+    env.step(5)  # 225
+    env.step(5)  # 270
+    env.step(5)  # 315
+    env.step(5)  # 0
+    env.step(5)  # 45
+    env.step(6)  # should use cache
+    env.step(6)
+    env.step(6)
+    env.step(6)
+    env.step(6)
+    env.step(6)
 
 
 def test_rotate_2():
@@ -576,7 +606,7 @@ def test_rotate_2():
         log_state_render_freq=1
     )
     probe = Probe(
-        pos=np.array([0 / 1000, 0, 0]), # only X and Y
+        pos=np.array([0 / 1000, 0 / 1000, 0]), # only X and Y
         angle=0,
         width=40 / 1000,
         height=10 / 1000,
@@ -591,13 +621,13 @@ def test_rotate_2():
     env.reset()
     env.step(1)
     env.step(1)
-    env.step(4)
-    env.step(4)
+    env.step(6)
+    env.step(6)
     env.step(2)
     env.step(2)
     env.step(2)
-    env.step(3)
-    env.step(3)
+    env.step(5)
+    env.step(5)
 
 
 def test_rotate_3():
@@ -612,7 +642,7 @@ def test_rotate_3():
         log_state_render_freq=1
     )
     probe = Probe(
-        pos=np.array([0 / 1000, 0, 0]), # only X and Y
+        pos=np.array([0 / 1000, 0 / 1000, 0]), # only X and Y
         angle=0,
         width=40 / 1000,
         height=10 / 1000,
@@ -627,8 +657,7 @@ def test_rotate_3():
     env.reset()
     env.step(2)
     for _ in range(9):
-        env.step(3)
-
+        env.step(5)
 
 def test_random_probe_generator_with_angle():
     trajactory_logger = TrajectoryLogger(
@@ -647,7 +676,7 @@ def test_random_probe_generator_with_angle():
         focal_depth=50 / 1000
     )
     teddy = Teddy(
-        belly_pos=np.array([0 / 1000, 0, 50 / 1000]), # X, Y, Z
+        belly_pos=np.array([0 / 1000, 0 / 1000, 50 / 1000]), # X, Y, Z
         scale=12 / 1000,
         head_offset=.9
     )
@@ -705,7 +734,7 @@ def test_step_reduction_1():
         focal_depth=50 / 1000
     )
     teddy = Teddy(
-        belly_pos=np.array([0 / 1000, 0, 50 / 1000]), # X, Y, Z
+        belly_pos=np.array([0 / 1000, 0 / 1000, 50 / 1000]), # X, Y, Z
         scale=12 / 1000,
         head_offset=.9
     )
@@ -728,10 +757,11 @@ def test_step_reduction_1():
     )
     
     env.reset()
-    env.step(4) # 20 deg
-    env.step(4) # 40 deg
-    env.step(4) # 60 deg
-    env.step(2) # (4mm, 0), step reduction
+    env.step(6) # 10 deg
+    env.step(6) # 20 deg
+    env.step(6) # 30 deg
+    env.step(6) # 40 deg
+    env.step(1) # (-8mm, 0, 50mm), step reduction
 
 
 def test_step_reduction_2():
@@ -742,14 +772,14 @@ def test_step_reduction_2():
         log_state_render_freq=1
     )
     probe = Probe(
-        pos=np.array([0 / 1000, 0, 0]), # only X and Y
+        pos=np.array([0 / 1000, 0/1000, 0]), # only X and Y
         angle=0,
         width=40 / 1000,
         height=10 / 1000,
         focal_depth=50 / 1000
     )
     teddy = Teddy(
-        belly_pos=np.array([0 / 1000, 0, 50 / 1000]), # X, Y, Z
+        belly_pos=np.array([0 / 1000, 0 / 1000, 50 / 1000]), # X, Y, Z
         scale=12 / 1000,
         head_offset=.9
     )
@@ -772,10 +802,11 @@ def test_step_reduction_2():
     )
     
     env.reset()
-    env.step(2) # (5mm, 0)
-    env.step(1) # (0, 0)
-    env.step(2) # (5mm, 0)
-    env.step(1) # (1mm, 0), step reduction
+    env.step(6) # 10 deg
+    env.step(6) # 20 deg
+    env.step(6) # 30 deg
+    env.step(6) # 40 deg
+    env.step(6) # 48 deg, step reduction
 
 def test_step_reduction_3():
     trajactory_logger = TrajectoryLogger(
@@ -785,14 +816,14 @@ def test_step_reduction_3():
         log_state_render_freq=1
     )
     probe = Probe(
-        pos=np.array([0 / 1000, 0, 0]), # only X and Y
+        pos=np.array([0 / 1000, 0 / 1000, 0]), # only X and Y
         angle=0,
         width=40 / 1000,
         height=10 / 1000,
-        focal_depth=50 / 1000
+        focal_depth=30 / 1000
     )
     teddy = Teddy(
-        belly_pos=np.array([0 / 1000, 0, 50 / 1000]), # X, Y, Z
+        belly_pos=np.array([0 / 1000, 0 / 1000, 50 / 1000]), # X, Y, Z
         scale=12 / 1000,
         head_offset=.9
     )
@@ -808,17 +839,106 @@ def test_step_reduction_3():
     phantom_generator = ConstPhantomGenerator(phantom)
     probe_generator = ConstProbeGenerator(probe)
 
-    env = plane_task_env_fn(
+    env = combined_task_env_fn(
         trajactory_logger,
         probe_generator=probe_generator,
         phantom_generator=phantom_generator,
     )
-    
+
     env.reset()
-    env.step(4) # 20 deg
-    env.step(4) # 40 deg
-    env.step(2) # (5mm, 0)
-    env.step(2) # (9mm, 0), step reduction, shouldn't decrease though
+    env.step(6) # Z_NEG (0, 0, 40mm)
+    env.step(6) # Z_POS (0, 0, 50mm)
+    env.step(6) # Z_NEG (0, 0, 60mm)
+    env.step(6) # Z_POS (0, 0, 70mm)
+    env.step(1) # X_NEG (-8mm, 0, 70mm), step reduction
+
+def test_step_reduction_4():
+    trajactory_logger = TrajectoryLogger(
+        log_dir = LOG_DIR,
+        log_action_csv_freq=1,
+        log_state_csv_freq=1,
+        log_state_render_freq=1
+    )
+    probe = Probe(
+        pos=np.array([0 / 1000, 0 / 1000, 0]), # only X and Y
+        angle=0,
+        width=40 / 1000,
+        height=10 / 1000,
+        focal_depth=30 / 1000
+    )
+    teddy = Teddy(
+        belly_pos=np.array([0 / 1000, 0 / 1000, 50 / 1000]), # X, Y, Z
+        scale=12 / 1000,
+        head_offset=.9
+    )
+    phantom = ScatterersPhantom(
+            objects=[teddy],
+            x_border=(-40 / 1000, 40 / 1000),
+            y_border=(-40 / 1000, 40 / 1000),
+            z_border=(0, 90 / 1000),
+            n_scatterers=int(1e4),
+            n_bck_scatterers=int(1e3),
+            seed=42,
+        )
+    phantom_generator = ConstPhantomGenerator(phantom)
+    probe_generator = ConstProbeGenerator(probe)
+
+    env = combined_task_env_fn(
+        trajactory_logger,
+        probe_generator=probe_generator,
+        phantom_generator=phantom_generator,
+    )
+
+    env.reset()
+    env.step(5) # Z_NEG (0, 0, 20mm)
+    env.step(6) # Z_POS (0, 0, 30mm)
+    env.step(5) # Z_NEG (0, 0, 20mm)
+    env.step(6) # Z_POS (0, 0, 30mm)
+    env.step(1) # X_NEG (-8mm, 0, 30mm), step reduction
+
+def test_step_reduction_4():
+    trajactory_logger = TrajectoryLogger(
+        log_dir = LOG_DIR,
+        log_action_csv_freq=1,
+        log_state_csv_freq=1,
+        log_state_render_freq=1
+    )
+    probe = Probe(
+        pos=np.array([-10 / 1000, 0 / 1000, 0]), # only X and Y
+        angle=0,
+        width=40 / 1000,
+        height=10 / 1000,
+        focal_depth= 70 / 1000
+    )
+    teddy = Teddy(
+        belly_pos=np.array([0 / 1000, 0 / 1000, 50 / 1000]), # X, Y, Z
+        scale=12 / 1000,
+        head_offset=.9
+    )
+    phantom = ScatterersPhantom(
+            objects=[teddy],
+            x_border=(-40 / 1000, 40 / 1000),
+            y_border=(-40 / 1000, 40 / 1000),
+            z_border=(0, 90 / 1000),
+            n_scatterers=int(1e4),
+            n_bck_scatterers=int(1e3),
+            seed=42,
+        )
+    phantom_generator = ConstPhantomGenerator(phantom)
+    probe_generator = ConstProbeGenerator(probe)
+
+    env = combined_task_env_fn(
+        trajactory_logger,
+        probe_generator=probe_generator,
+        phantom_generator=phantom_generator,
+    )
+
+    env.reset()
+    env.step(5) # Z_POS (0mm, 0mm, 60mm)
+    env.step(5) # Z_POS (0mm, 0mm, 50mm)
+    env.step(5) # Z_POS (0mm, 0mm, 40mm)
+    env.step(5) # Z_POS (0mm, 0mm, 30mm)
+    env.step(5) # Z_POS (0mm, 0mm, 22mm), step reduction
 
 def test_get_confidence_map():
     trajactory_logger = TrajectoryLogger(
@@ -835,7 +955,7 @@ def test_get_confidence_map():
         focal_depth=50 / 1000
     )
     teddy = Teddy(
-        belly_pos=np.array([0 / 1000, 0, 50 / 1000]), # X, Y, Z
+        belly_pos=np.array([0 / 1000, 0 / 1000, 50 / 1000]), # X, Y, Z
         scale=12 / 1000,
         head_offset=.9
     )
@@ -883,4 +1003,5 @@ if __name__ == "__main__":
     #test_step_reduction_1()
     #test_step_reduction_2()
     #test_step_reduction_3()
-    test_get_confidence_map()
+    test_step_reduction_4()
+    #test_get_confidence_map()
