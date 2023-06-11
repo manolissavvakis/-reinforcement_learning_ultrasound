@@ -61,6 +61,8 @@ class TrajectoryLogger:
                     "action_name",
                     "reward",
                     "error",
+                    "step_reduction",
+                    "rotation_reduction",
                     "is_success"
                 ])
 
@@ -78,6 +80,7 @@ class TrajectoryLogger:
                     "obj_y",
                     "obj_z",
                     "obj_angle",
+                    "out_of_bounds"
                 ])
         if self.log_state_render_freq and self.state_views:
             self.state_render_loggers = []
@@ -86,7 +89,8 @@ class TrajectoryLogger:
             for v in self.state_views:
                 self.state_render_loggers.append(UsPhantomEnvRenderLogger(episode_dir, v))
 
-    def log_action(self, episode, step, action_code, reward, action_name, error, is_success=None):
+    def log_action(self, episode, step, action_code, action_name, reward, error,
+                   step_reduction=None, rotation_reduction=None, is_success=None):
         if episode % self.log_action_csv_freq == 0:
             self.action_logger.log(
                 step=step,
@@ -94,6 +98,8 @@ class TrajectoryLogger:
                 action_name=action_name,
                 reward=reward,
                 error=error,
+                step_reduction=step_reduction,
+                rotation_reduction=rotation_reduction,
                 is_success=is_success
             )
 
@@ -103,8 +109,10 @@ class TrajectoryLogger:
             # Get probe's and Teddy's (belly) state.
             state = env.get_state_desc()
 
-            # Add step number.
+            # Add step number and whether probe's out of constraints.
             state['step'] = step
+            state['out_of_bounds'] = None if not env.out_of_bounds else True
+
             self.state_logger.log(**state)
 
         # For each render logger,

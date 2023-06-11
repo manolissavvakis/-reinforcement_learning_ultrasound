@@ -3,7 +3,6 @@ from gym import spaces
 from gym.utils import EzPickle
 import logging
 import numpy as np
-import math
 import random
 
 _LOGGER = logging.getLogger(__name__)
@@ -79,6 +78,15 @@ class PlaneTaskUsEnv(PhantomUsEnv, EzPickle):
         theta = np.sin(np.radians(dtheta/2))
         error = 1/3 * np.sum(np.power([x, y, theta], 2))
         return error
+    
+    def _check_step_reduction(self, action):
+        step_reduction, rot_reduction = None, None
+        if action in range(1, 5):
+            step_reduction = self._check_distance_list()
+        elif action in range(5, 7):
+            rot_reduction = self._check_rotation_list()
+        return step_reduction, rot_reduction
+    
 
     def _update_state(self):
         if self.dislocation_rng and \

@@ -2,46 +2,43 @@ from envs.imaging import Probe, ImagingSystem
 from envs.phantom import Teddy, ScatterersPhantom
 from envs.generator import RandomProbeGenerator, ConstPhantomGenerator
 from envs.combined_task_us_env import CombinedTaskUsEnv
+from envs.utils import Config
 import numpy as np
 
-N_STEPS_PER_EPISODE = 50
-N_STEPS_PER_EPOCH = 100
-EPOCHS = 1000 # NO_EPISODES = (NSTEPS_PER_EPOCH/NSTEPS_PER_EPISODE)*EPOCHS
-N_WORKERS = 4
+def env_fn(trajectory_logger, config_path):
 
-def env_fn(trajectory_logger):
+    config = Config(config_path)
     
     probe = Probe(
-        pos=np.array([-20 / 1000, -5 / 1000, 0]),
-        angle=0,
-        width=40 / 1000,
-        height=10 / 1000,
-        focal_depth=10 / 1000
+        pos = np.array(config.get_probe_values('pos')),
+        angle = config.get_probe_values('angle'),
+        width = config.get_probe_values('width'),
+        height = config.get_probe_values('height'),
+        focal_depth = config.get_probe_values('focal_depth')
     )
     teddy = Teddy(
-        belly_pos=np.array([0 / 1000, 0 / 1000, 50 / 1000]),
-        scale=12 / 1000,
-        head_offset=.9
+        belly_pos = np.array(config.get_teddy_values('belly_pos')),
+        scale = config.get_teddy_values('scale'),
+        head_offset = config.get_teddy_values('head_offset')
     )
     phantom = ScatterersPhantom(
-        objects=[teddy],
-        x_border=(-40 / 1000, 40 / 1000),
-        y_border=(-40 / 1000, 40 / 1000),
-        z_border=(0, 90 / 1000),
-        n_scatterers=int(1e4),
-        n_bck_scatterers=int(1e3),
-        seed=42,
+        objects = [teddy],
+        x_border = config.get_scatters_values('x_border'),
+        y_border = config.get_scatters_values('y_border'),
+        z_border = config.get_scatters_values('z_border'),
+        n_scatterers = int(config.get_scatters_values('n_scatterers')),
+        n_bck_scatterers = int(config.get_scatters_values('n_bck_scatterers')),
     )
     imaging = ImagingSystem(
-        c=1540,
-        fs=100e6,
-        image_width=40 / 1000,
-        image_height=90 / 1000,
-        image_resolution=(40, 90),  # [pixels]
-        median_filter_size=5,
-        dr_threshold=-200,
-        dec=1,
-        no_lines=64
+        c = config.get_imaging_values('c'),
+        fs = config.get_imaging_values('fs'),
+        image_width = config.get_imaging_values('image_width'),
+        image_height = config.get_imaging_values('image_height'),
+        image_resolution = config.get_imaging_values('image_resolution'),  # [pixels]
+        median_filter_size = config.get_imaging_values('median_filter_size'),
+        dr_threshold = config.get_imaging_values('dr_threshold'),
+        dec = config.get_imaging_values('dec'),
+        no_lines = config.get_imaging_values('no_lines')
     )
     env = CombinedTaskUsEnv(
         imaging=imaging,
@@ -49,17 +46,16 @@ def env_fn(trajectory_logger):
         probe_generator=RandomProbeGenerator(
             ref_probe=probe,
             object_to_align=teddy,
-            seed=42,
-            x_pos= np.arange(-15/1000, 19/1000, step=5/1000),
-            y_pos= np.arange(-15/1000, 19/1000, step=5/1000),
-            focal_pos=[50/1000], # same as for Teddy
-            angle=[45, 60, 75, 90]
+            x_pos = config.get_generator_values('x_pos'),
+            y_pos = config.get_generator_values('y_pos'),
+            focal_pos = config.get_generator_values('focal_pos'),
+            angle = config.get_generator_values('angle')
         ),
-        max_steps=N_STEPS_PER_EPISODE,
-        no_workers=N_WORKERS,
-        use_cache=True,
-        trajectory_logger=trajectory_logger,
-        step_size=5/1000,
-        rot_deg=15
+        max_steps = config.get_value('n_steps_per_episode'),
+        no_workers = config.get_env_values('no_workers'),
+        use_cache = config.get_env_values('use_cache'),
+        trajectory_logger = trajectory_logger,
+        step_size = config.get_env_values('step_size'),
+        rot_deg = config.get_env_values('rot_deg')
     )
     return env

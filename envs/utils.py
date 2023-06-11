@@ -3,6 +3,7 @@ import json
 import jsonpickle
 import shutil
 import os
+import torch
 
 def copy_and_apply(src, deep=False, **kwargs):
     if deep:
@@ -15,38 +16,6 @@ def copy_and_apply(src, deep=False, **kwargs):
 
 def to_string(obj):
     return jsonpickle.encode(obj)
-
-def convert_json(obj):
-    #Convert obj to a version which can be serialized with JSON.
-    if is_json_serializable(obj):
-        return obj
-    else:
-        if isinstance(obj, dict):
-            return {convert_json(k): convert_json(v) 
-                    for k,v in obj.items()}
-
-        elif isinstance(obj, tuple):
-            return (convert_json(x) for x in obj)
-
-        elif isinstance(obj, list):
-            return [convert_json(x) for x in obj]
-
-        elif hasattr(obj,'__name__') and not('lambda' in obj.__name__):
-            return convert_json(obj.__name__)
-
-        elif hasattr(obj,'__dict__') and obj.__dict__:
-            obj_dict = {convert_json(k): convert_json(v) 
-                        for k,v in obj.__dict__.items()}
-            return {str(obj): obj_dict}
-
-        return str(obj)
-
-def is_json_serializable(v):
-    try:
-        json.dumps(v)
-        return True
-    except:
-        return False
 
 def load_last_model(fpath):
     if not os.path.exists(fpath):
@@ -73,3 +42,101 @@ def delete_trajectory__files(fpath, itr):
 
         for episode in episodes:
             shutil.rmtree(os.path.join(fpath, episode))
+
+class Config:
+    def __init__(self, config_filepath):
+        config_file = open(config_filepath)
+        self.config_dict = json.load(config_file)
+
+    def get_value(self, key):
+        try:
+            value = self.config_dict[key]
+            return value
+        except KeyError:
+            raise KeyError(
+                f'Key "{key}" does not exist in config file!!!'
+            )    
+
+    def get_list(self, keyword='slide_ids'):
+        try:
+            slide_ids = self.config_dict[keyword].split(',')
+            return slide_ids
+        except KeyError:
+            raise KeyError(
+                'Requested list does not exist in config file!!!'
+            )
+	
+    def get_agent_values(self, key):
+        try:
+            value = self.config_dict['agent'][key]
+            if key == 'activation_fn':
+                act_fn_dict={"torch.nn.ReLU": torch.nn.ReLU(), "torch.nn.Tanh": torch.nn.Tanh()}
+                value = act_fn_dict[self.config_dict['agent'][key]]
+            return value
+        except KeyError:
+            raise KeyError(
+            f'Key "{key}" does not exist in config file!!!'
+        )
+
+    def get_traj_values(self, key):
+        try:
+            value = self.config_dict['env']['trajectory_logger'][key]
+            return value
+        except KeyError:
+            raise KeyError(
+                f'Key "{key}" does not exist in config file!!!'
+            )
+
+    def get_probe_values(self, key):
+        try:
+            value = self.config_dict['env']['probe'][key]
+            return value
+        except KeyError:
+            raise KeyError(
+                f'Key "{key}" does not exist in config file!!!'
+            )
+
+    def get_teddy_values(self, key):
+        try:
+            value = self.config_dict['env']['teddy'][key]
+            return value
+        except KeyError:
+            raise KeyError(
+                f'Key "{key}" does not exist in config file!!!'
+            )
+        
+    def get_scatters_values(self, key):
+        try:
+            value = self.config_dict['env']['phantom'][key]
+            return value
+        except KeyError:
+            raise KeyError(
+                f'Key "{key}" does not exist in config file!!!'
+            )
+        
+    def get_imaging_values(self, key):
+        try:
+            value = self.config_dict['env']['imaging'][key]
+            return value
+        except KeyError:
+            raise KeyError(
+                f'Key "{key}" does not exist in config file!!!'
+            )
+        
+    def get_generator_values(self, key):
+        try:
+            value = self.config_dict['env']['probe_generator'][key]
+            return value
+        except KeyError:
+            raise KeyError(
+                f'Key "{key}" does not exist in config file!!!'
+            )
+        
+    def get_env_values(self, key):
+        try:
+            value = self.config_dict['env'][key]
+            return value
+        except KeyError:
+            raise KeyError(
+                f'Key "{key}" does not exist in config file!!!'
+            )

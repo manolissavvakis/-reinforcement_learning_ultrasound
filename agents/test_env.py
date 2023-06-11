@@ -134,8 +134,8 @@ def test_reset():
     trajactory_logger = TrajectoryLogger(
         #log_dir=sys.argv[1],
         log_dir = LOG_DIR,
-        log_action_csv_freq=10,
-        log_state_csv_freq=10,
+        log_action_csv_freq=1,
+        log_state_csv_freq=1,
         log_state_render_freq=10
     )
     probe = Probe(
@@ -154,8 +154,8 @@ def test_moving_probe_works():
     trajactory_logger = TrajectoryLogger(
         #log_dir=sys.argv[1],
         log_dir = LOG_DIR,
-        log_action_csv_freq=10,
-        log_state_csv_freq=10,
+        log_action_csv_freq=1,
+        log_state_csv_freq=1,
         log_state_render_freq=10
     )
     probe = Probe(

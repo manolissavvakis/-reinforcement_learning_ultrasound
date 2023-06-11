@@ -1,5 +1,4 @@
 from envs.us_env import PhantomUsEnv
-from gym import spaces
 import logging
 import numpy as np
 import random
@@ -43,6 +42,14 @@ class CombinedTaskUsEnv(PhantomUsEnv):
         theta = np.sin(np.radians(dtheta/2))
         error = 1/4 * np.sum(np.power([x, y, z, theta], 2))
         return error
+    
+    def _check_step_reduction(self, action):
+        step_reduction, rot_reduction = None, None
+        if action in range(1, 8):
+            step_reduction = self._check_distance_list()
+        elif action in range(8, 10):
+            rot_reduction = self._check_rotation_list()
+        return step_reduction, rot_reduction    
         
     def _is_in_angle_range(self, angle):
         left, right = self.angle_range

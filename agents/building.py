@@ -1,19 +1,15 @@
 from envs.combined_task_us_env import CombinedTaskUsEnv
 from envs.logger import TrajectoryLogger
-from envs.env_fn import env_fn, N_STEPS_PER_EPISODE, N_STEPS_PER_EPOCH, EPOCHS
-from envs.utils import load_last_model, delete_trajectory__files
-
+from envs.env_fn import env_fn
+from envs.confidence_wrapper import ConfidenceWrapper
+from envs.utils import load_last_model, delete_trajectory__files, Config
 from custom_feature_extractor import CustomFeaturesExtractor
-from callbacks import ConfigCallback, LoggingCallback, TestConfigCallback
-
-
-import torch.nn as nn
+from callbacks import LoggingCallback
 from stable_baselines3 import A2C
 from stable_baselines3.common.callbacks import CheckpointCallback, CallbackList
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv
-from stable_baselines3.common.sb2_compat.rmsprop_tf_like import RMSpropTFLike
-
+import shutil
 import numpy as np
 import argparse
 import os
@@ -22,8 +18,8 @@ def main():
 
     parser = argparse.ArgumentParser(description="Train agent in env: %s" %
                                                     CombinedTaskUsEnv.__name__)
-    parser.add_argument("--exp_dir", dest="exp_dir", type=str,
-                        help="Where to put all information about the experiment",
+    parser.add_argument("--config_path", dest="config_path", type=str,
+                        help="Directory of the configurations of the experiment",
                         required=True)
     parser.add_argument("--exp_name", dest="exp_name", type=str,
                         help="What's the name of the experiment",
@@ -31,31 +27,46 @@ def main():
 
     args = parser.parse_args()
 
+    CONFIG_PATH = os.path.join(args.config_path, 'config.json')
+    config = Config(CONFIG_PATH)
+
     # paths to logs
-    LOG_DIR = os.path.join(args.exp_dir, args.exp_name)
-    TRAJECTORY_LOGS = os.path.join(LOG_DIR, 'trajectory_logger')
-    TENSORBOARD_LOGS = os.path.join(LOG_DIR, 'tensorboard_logs')
-    CHECKPOINT_LOGS = os.path.join(LOG_DIR, 'checkpoints')
-    MONITOR_LOGS = os.path.join(LOG_DIR, 'monitor')
+    EXP_DIR = os.path.join(config.get_value('log_dir'), args.exp_name)
+    TRAJECTORY_LOGS = os.path.join(EXP_DIR, 'trajectory_logger')
+    TENSORBOARD_LOGS = os.path.join(EXP_DIR, 'tensorboard_logs')
+    CHECKPOINT_LOGS = os.path.join(EXP_DIR, 'checkpoints')
+    MONITOR_LOGS = os.path.join(EXP_DIR, 'monitor')
+    
+    N_STEPS_PER_EPISODE=config.get_value('n_steps_per_episode')
+    N_STEPS_PER_EPOCH=config.get_value('n_steps_per_epoch')
+    EPOCHS=config.get_value('epochs')
 
     # Create the experiment directory.
-    if not os.path.exists(LOG_DIR):
-        os.mkdir(LOG_DIR)
+    if not os.path.exists(EXP_DIR):
+        os.mkdir(EXP_DIR)
+
+    # Copy config file in the experiment directory.
+    shutil.copy(CONFIG_PATH, EXP_DIR)
 
     # Create the TrajectoryLogger object.
     trajectory_logger = TrajectoryLogger(
-        log_dir=TRAJECTORY_LOGS,
-        log_action_csv_freq=1,
-        log_state_csv_freq=1,
-        log_state_render_freq=10
+        log_dir = TRAJECTORY_LOGS,
+        log_action_csv_freq = config.get_traj_values('log_action_csv_freq'),
+        log_state_csv_freq = config.get_traj_values('log_state_csv_freq'),
+        log_state_render_freq = config.get_traj_values('log_state_render_freq')
     )    
-    env_builder = lambda: env_fn(trajectory_logger)
+    #env_builder = lambda: env_fn(trajectory_logger)
         
     # Apply a DummyVecEnv Wrapper to the env.
-    env = DummyVecEnv([env_builder])
+    #env = DummyVecEnv([env_builder])
+    env = env_fn(trajectory_logger, CONFIG_PATH) 
+
+    # Apply Confidence Map Wrapper, if needed.
+    if config.get_value('use_confidence'):
+        env = ConfidenceWrapper(env, config)
     
     # Apply a Monitor Wrapper to the env.
-    #env = Monitor(env, MONITOR_LOGS, info_keywords=("is_success",))
+    env = Monitor(env, MONITOR_LOGS, info_keywords=("is_success",))
 
     # Define all the callbacks needed for training.
     checkpoint_callback = CheckpointCallback(
@@ -64,25 +75,21 @@ def main():
         name_prefix="rl_model",
         save_vecnormalize=True
     )
-        
-    config_callback = ConfigCallback(
-        log_dir=LOG_DIR
-    )
     
     logs_callback = LoggingCallback(
-        log_dir=LOG_DIR,
-        gif_freq=500 
+        exp_dir=EXP_DIR,
+        gif_freq=config.get_value('gif_freq')
     )
     
-    callback = CallbackList([checkpoint_callback, config_callback, logs_callback])
+    callback = CallbackList([checkpoint_callback, logs_callback])
 
     # Create a dictionary with policy parameters.
     policy_kwargs = dict(
         features_extractor_class=CustomFeaturesExtractor,
-        net_arch=dict(pi=[], vf=[]),
-        activation_fn=nn.ReLU(),
+        net_arch= config.get_agent_values('net_arch'),
+        activation_fn=config.get_agent_values('activation_fn'),
     )
-
+    
     # Check if there's any model to load.
     existing_model = load_last_model(CHECKPOINT_LOGS)
 
@@ -91,25 +98,24 @@ def main():
         model = A2C(
             'CnnPolicy',
             env,
-            n_steps=N_STEPS_PER_EPOCH,
-            policy_kwargs=policy_kwargs,
-            gamma=0.95,
-            use_rms_prop=True,
-            #ent_coef=0.001,
-            learning_rate=1e-3,
-            normalize_advantage=True,
-            verbose=1,
+            n_steps = N_STEPS_PER_EPOCH,
+            policy_kwargs = policy_kwargs,
+            gamma = config.get_agent_values('gamma'),
+            use_rms_prop = config.get_agent_values('use_rms_prop'),
+            ent_coef = config.get_agent_values('ent_coef'),
+            learning_rate = config.get_agent_values('learning_rate'),
+            normalize_advantage = config.get_agent_values('normalize_advantage'),
+            verbose = config.get_agent_values('verbose'),
             #stats_window_size=10,
             tensorboard_log=TENSORBOARD_LOGS,
-            seed=np.random.seed(42)
-        )
-        
+            seed = np.random.seed(config.get_agent_values('seed'))
+    )    
         model.learn(total_timesteps=N_STEPS_PER_EPOCH*EPOCHS, 
             callback=callback,
             log_interval=N_STEPS_PER_EPOCH,
-            tb_log_name='A2C',
+            tb_log_name=f'{args.exp_name}_A2C',
         )
-
+    
     # If there is a model, load it and delete all the logs that occured
     # after the model was last time saved.
     else:
@@ -133,10 +139,11 @@ def main():
         model.learn(total_timesteps=remaining_steps, 
             callback=callback,
             log_interval=N_STEPS_PER_EPOCH,
-            reset_num_timesteps=False
+            reset_num_timesteps=config.get_agent_values('reset_num_timesteps')
         )
 
-    print('training is done.')
+    print('Training is completed.')
 
 if __name__ == "__main__":
     main()
+

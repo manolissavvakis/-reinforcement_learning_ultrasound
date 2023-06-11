@@ -2,7 +2,6 @@ from envs.us_env import PhantomUsEnv
 from gym import spaces
 import logging
 import numpy as np
-import math
 import random
 
 _LOGGER = logging.getLogger(__name__)
@@ -69,6 +68,12 @@ class FocalPointTaskUsEnv(PhantomUsEnv):
         z = dz/(self.phantom.get_main_object().belly.pos[2])
         error = 1/3 * np.sum(np.power([x, y, z], 2))
         return error
+    
+    def _check_step_reduction(self, action):
+        step_reduction = None
+        if action in range(1, 7):
+            step_reduction = self._check_distance_list()
+        return step_reduction, None
 
     def _update_state(self):
         if self.dislocation_rng and \

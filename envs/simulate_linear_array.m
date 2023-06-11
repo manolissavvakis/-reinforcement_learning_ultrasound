@@ -46,7 +46,6 @@ function [] = simulate_linear_array(id, input_path, output_path)
     end
 
     input_file = fullfile(input_path, "input.mat");
-
     path_to_go = fullfile(input_path, strcat("go.", num2str(id)));
     path_to_die = fullfile(input_path, strcat("die.", num2str(id)));
 	
@@ -110,7 +109,7 @@ function [] = simulate_linear_array(id, input_path, output_path)
                     
                  %   fid = fopen(lock_filename, 'w');
                     
-                    disp(strcat("creating line ", num2str(i)));
+                    %disp(strcat("creating line ", num2str(i)));
                     % We are first in locking this scanline.
 								
 					% The imaging direction
@@ -139,9 +138,9 @@ function [] = simulate_linear_array(id, input_path, output_path)
                     %fclose(fid);
                     %delete(fid);
 					
-                else
+                %else
                     
-                    disp(['Line ', num2str(i),' is being made by another worker.'])
+                    %disp(['Line ', num2str(i),' is being made by another worker.'])
                   
                 end
                 

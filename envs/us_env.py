@@ -5,12 +5,9 @@ import os
 from gym import spaces
 from envs.generator import ConstPhantomGenerator
 from envs.fieldii import Field2
-
-
 import matplotlib.pyplot as plt
 import matplotlib.ticker
 from mpl_toolkits.mplot3d import Axes3D
-import subprocess
 import logging
 
 _LOGGER = logging.getLogger(__name__)
@@ -50,9 +47,11 @@ class PhantomUsEnv(gym.Env):
         # observation.
         self.out_of_bounds = None
         self.current_observation = None
-        self.last_distance = None
+        ## self.last_distance = None
         self.last_error = None
-        self.distance_list = []
+        self.last_angle = None
+        ## self.distance_list = None
+        ## self.rotation_list = None
 
         self.field_session = Field2(no_workers=no_workers)
         self.use_cache = use_cache
@@ -69,7 +68,6 @@ class PhantomUsEnv(gym.Env):
             low=0,
             high=1,
             shape=observation_shape,
-            #dtype=np.uint8)
             dtype=np.float64)
         self.metadata = {
             'render.modes': ['rgb_array']
@@ -125,9 +123,10 @@ class PhantomUsEnv(gym.Env):
         self.phantom = next(self.phantom_generator)
         self.probe = next(self.probe_generator)
         self.out_of_bounds = False
-        self.step_size = self.initial_step
-        self.rot_deg = self.initial_rot
-        self.distance_list = []
+        ## self.step_size = self.initial_step
+        ## self.rot_deg = self.initial_rot
+        ## self.distance_list = []
+        ## self.rotation_list = []
         self.last_error = self.get_error()
         self.current_step = 0
         self.current_episode += 1
@@ -159,7 +158,7 @@ class PhantomUsEnv(gym.Env):
         o = self._get_observation()
         
         reward = self._get_reward()
-        self._check_distance_list()
+        ## step_reduction, rotation_reduction = self._check_step_reduction(action)
         # Update current state independently to the action
         # (for example apply shaking noise to the probe position).
         self._update_state()
@@ -173,9 +172,11 @@ class PhantomUsEnv(gym.Env):
                 episode=self.current_episode,
                 step=self.current_step,
                 action_code=action,
-                reward=reward,
                 action_name=self.get_action_name(action),
+                reward=reward,
                 error=self.last_error,
+                ## step_reduction=step_reduction,
+                ## rotation_reduction=rotation_reduction,
                 is_success=info["is_success"]
             )
             self.trajectory_logger.log_state(
@@ -237,16 +238,11 @@ class PhantomUsEnv(gym.Env):
                 reward_hint = 0
 
             self.last_error = e
-            """  
-            delta_quality = self._get_quality_improvement()
-            """
+
             reward = reward_clipped + reward_hint
             return reward
 
     def _update_state(self):
-        raise NotImplementedError
-        
-    def _is_episode_successful(self):
         raise NotImplementedError
     
     def get_error(self):
@@ -308,12 +304,14 @@ class PhantomUsEnv(gym.Env):
             self.probe = self.probe.change_focal_depth(z_t)
         else:
             self.out_of_bounds = True
+        self.probe.pos = np.round(self.probe.pos, decimals=3)
+        self.probe.focal_depth = round(self.probe.focal_depth, ndigits=3)
 
     def _get_observation(self):
         if self.use_cache:
             return self._get_cached_observation()
         else:
-            return self._get_image()   
+            return self._get_image() 
 
     def _get_cached_observation(self):
         # Assumes, that objects in the phantom does not move (are 'static').
@@ -340,6 +338,7 @@ class PhantomUsEnv(gym.Env):
         then, if they are less than a rel_tol, reduce the step size. 
         """
         self.last_distance = self._get_distance()
+        step_red = None
         if len(self.distance_list) < 3:
             self.distance_list.append(self.last_distance)
         elif len(self.distance_list) == 3:
@@ -350,11 +349,33 @@ class PhantomUsEnv(gym.Env):
                 if not math.isclose(d_distance[i], d_distance[i+1], rel_tol=0.1) and step_red:
                     self.distance_list = self.distance_list[i:]
                     self.distance_list.append(self.last_distance)
-                    step_red = False
+                    step_red = None
             if step_red:
                 self.step_size -= self.initial_step/5
-                self.rot_deg -= int(self.initial_rot/5)
                 self.distance_list.clear()
+
+        return step_red
+    
+    def _check_rotation_list(self):
+        self.last_angle = self.probe.angle
+        rot_red = None
+        if len(self.rotation_list) < 3:
+            self.rotation_list.append(self.last_angle)
+        elif len(self.rotation_list) == 3:
+            sin_list, sin_last_angle = np.sin(np.radians(self.rotation_list)), np.sin(np.radians(self.last_angle))
+            d_rotation = np.subtract(sin_list, np.append(sin_list[1:], sin_last_angle))
+            d_rotation = np.abs(d_rotation)
+            rot_red = True
+            for i in range(d_rotation.size-1):
+                if not math.isclose(d_rotation[i], d_rotation[i+1], rel_tol=0.1) and rot_red:
+                    self.rotation_list = self.rotation_list[i:]
+                    self.rotation_list.append(self.last_angle)
+                    rot_red = None
+            if rot_red:
+                self.rot_deg -= int(self.initial_rot/5)
+                self.rotation_list.clear()
+
+        return rot_red
 
     def _check_termination_conditions(self):
         """
@@ -366,7 +387,12 @@ class PhantomUsEnv(gym.Env):
         In addition, if episode's over, check if it reached the goal pose.
         """
         episode_over = False
-        if self.current_step >= self.max_steps or self.out_of_bounds or math.isclose(self.step_size, 0., abs_tol= 0.001):
+        if (self.current_step >= self.max_steps or
+            self.out_of_bounds
+            # or
+            #math.isclose(self.step_size, 0., abs_tol= 0.001) or
+            #math.isclose(self.rot_deg, 0., abs_tol= 0.001)
+            ):
             episode_over = True
         if not episode_over:
             success = None
@@ -384,8 +410,6 @@ class PhantomUsEnv(gym.Env):
         bmode = self.imaging.image(rf_array)
         bmode = bmode.reshape((1,)+bmode.shape)
         _LOGGER.debug("B-mode image shape: %s" % str(bmode.shape))
-        np.savetxt(os.path.join(os.getcwd(), 'rf_data_test.csv'), rf_array.squeeze(), delimiter=",")
-        np.savetxt(os.path.join(os.getcwd(), 'bmode_test.csv'), bmode.squeeze(), delimiter=",")
         return bmode
     
     def is_episode_successful(self):
@@ -395,8 +419,6 @@ class PhantomUsEnv(gym.Env):
         """
         if self.out_of_bounds:
             return False
-        elif self.current_step != self.max_steps:
-            return None
         else:
             # Define a tolerance which sets position and angle on target.
             rel_tol = 0.1
