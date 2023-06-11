@@ -44,7 +44,6 @@ class ConfidenceWrapper(gym.Wrapper):
         self.confidence_maps[1] = self._get_map(o)
         
         reward = self._get_reward()
-        ## step_reduction, rotation_reduction = self._check_step_reduction(action)
         # Update current state independently to the action
         # (for example apply shaking noise to the probe position).
         self.env._update_state()
@@ -61,8 +60,6 @@ class ConfidenceWrapper(gym.Wrapper):
                 action_name=self.get_action_name(action),
                 reward=reward,
                 error=self.last_error,
-                ## step_reduction=step_reduction,
-                ## rotation_reduction=rotation_reduction,
                 is_success=info["is_success"]
             )
             self.trajectory_logger.log_state(

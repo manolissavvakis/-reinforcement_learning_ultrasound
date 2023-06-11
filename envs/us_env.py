@@ -38,20 +38,15 @@ class PhantomUsEnv(gym.Env):
         self.imaging = imaging
         self.max_steps = max_steps
         self.step_size = step_size
-        self.initial_step = step_size
         self.rot_deg = rot_deg
-        self.initial_rot = rot_deg
         self.current_step = 0
         self.current_episode = -1
         # To reduce the number of calls to FieldII, we store lastly seen
         # observation.
         self.out_of_bounds = None
         self.current_observation = None
-        ## self.last_distance = None
         self.last_error = None
         self.last_angle = None
-        ## self.distance_list = None
-        ## self.rotation_list = None
 
         self.field_session = Field2(no_workers=no_workers)
         self.use_cache = use_cache
@@ -123,10 +118,6 @@ class PhantomUsEnv(gym.Env):
         self.phantom = next(self.phantom_generator)
         self.probe = next(self.probe_generator)
         self.out_of_bounds = False
-        ## self.step_size = self.initial_step
-        ## self.rot_deg = self.initial_rot
-        ## self.distance_list = []
-        ## self.rotation_list = []
         self.last_error = self.get_error()
         self.current_step = 0
         self.current_episode += 1
@@ -158,7 +149,6 @@ class PhantomUsEnv(gym.Env):
         o = self._get_observation()
         
         reward = self._get_reward()
-        ## step_reduction, rotation_reduction = self._check_step_reduction(action)
         # Update current state independently to the action
         # (for example apply shaking noise to the probe position).
         self._update_state()
@@ -175,8 +165,6 @@ class PhantomUsEnv(gym.Env):
                 action_name=self.get_action_name(action),
                 reward=reward,
                 error=self.last_error,
-                ## step_reduction=step_reduction,
-                ## rotation_reduction=rotation_reduction,
                 is_success=info["is_success"]
             )
             self.trajectory_logger.log_state(
@@ -329,69 +317,17 @@ class PhantomUsEnv(gym.Env):
             self._cache[state] = bmode
         return self._cache[state]
 
-    def _check_distance_list(self):
-        """
-        Check if the distance from the goal for 4 consecutive actions
-        is less than a threshold. If that's true, reduce the step size.
-        This function is called after an action is taken (not in env.reset()).
-        Collect distances in a list, calculate their pairwise differences and
-        then, if they are less than a rel_tol, reduce the step size. 
-        """
-        self.last_distance = self._get_distance()
-        step_red = None
-        if len(self.distance_list) < 3:
-            self.distance_list.append(self.last_distance)
-        elif len(self.distance_list) == 3:
-            d_distance = np.subtract(self.distance_list, self.distance_list[1:] + [self.last_distance])
-            d_distance = np.abs(d_distance)
-            step_red = True
-            for i in range(d_distance.size-1):
-                if not math.isclose(d_distance[i], d_distance[i+1], rel_tol=0.1) and step_red:
-                    self.distance_list = self.distance_list[i:]
-                    self.distance_list.append(self.last_distance)
-                    step_red = None
-            if step_red:
-                self.step_size -= self.initial_step/5
-                self.distance_list.clear()
-
-        return step_red
-    
-    def _check_rotation_list(self):
-        self.last_angle = self.probe.angle
-        rot_red = None
-        if len(self.rotation_list) < 3:
-            self.rotation_list.append(self.last_angle)
-        elif len(self.rotation_list) == 3:
-            sin_list, sin_last_angle = np.sin(np.radians(self.rotation_list)), np.sin(np.radians(self.last_angle))
-            d_rotation = np.subtract(sin_list, np.append(sin_list[1:], sin_last_angle))
-            d_rotation = np.abs(d_rotation)
-            rot_red = True
-            for i in range(d_rotation.size-1):
-                if not math.isclose(d_rotation[i], d_rotation[i+1], rel_tol=0.1) and rot_red:
-                    self.rotation_list = self.rotation_list[i:]
-                    self.rotation_list.append(self.last_angle)
-                    rot_red = None
-            if rot_red:
-                self.rot_deg -= int(self.initial_rot/5)
-                self.rotation_list.clear()
-
-        return rot_red
-
     def _check_termination_conditions(self):
         """
         Check if the episode in over.
         Conditions to terminate an episode:
         1) Probe is outside the phantom.
         2) Reached max number of steps.
-        3) Action step has reached zero.
         In addition, if episode's over, check if it reached the goal pose.
         """
         episode_over = False
         if (self.current_step >= self.max_steps or
             self.out_of_bounds
-            # or
-            #math.isclose(self.step_size, 0., abs_tol= 0.001) or
-            #math.isclose(self.rot_deg, 0., abs_tol= 0.001)
             ):
             episode_over = True
         if not episode_over:
