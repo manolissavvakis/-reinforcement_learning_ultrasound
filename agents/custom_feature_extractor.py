@@ -4,13 +4,17 @@ from gym.spaces import Discrete
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 
 class CustomFeaturesExtractor(BaseFeaturesExtractor):
-    def __init__(self, observation_space: Discrete, features_dim: int=64,
-        hidden_size = [16, 32], kernel = 3, stride = 2):
+    def __init__(self,
+                observation_space: Discrete,
+                features_dim: int=64,
+                hidden_size = [16, 32],
+                kernel = 3,
+                stride = 2
+                ):
 
         super().__init__(observation_space, features_dim)
         # We assume CxHxW images (channels first)
-
-        # --- n_input_channels for grey scale is 1.
+        # Grey scale images have 1 channel.
         n_input_channels = observation_space.shape[0]
         
         self.cnn = nn.Sequential(

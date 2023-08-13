@@ -22,11 +22,8 @@ class Ball:
         """
         Moves the ball by a given vector.
 
-        Args:
-            t: a translation vector
-
-        Returns:
-            translated ball (a copy).
+        :param t: a translation vector
+        :return: translated ball (a copy).
         """
         return copy_and_apply(self, deep=False, pos=self.pos + t)
 
@@ -35,12 +32,9 @@ class Ball:
         Rotates the position of the ball's center by a given angle (in degrees)
         around given axis. Object is rotated in OXZ plane.
 
-        Args:
-            angle: rotation angle, in degrees
-            axis_pos: the position of the axis of rotation (x, y, z)
-
-        Returns:
-            rotated copy of this object
+        :param angle: rotation angle, in degrees
+        :param axis_pos: the position of the axis of rotation (x, y, z)
+        :return: rotated copy of this object
         """
         c = math.cos(math.radians(angle))
         s = math.sin(math.radians(angle))
@@ -54,12 +48,9 @@ class Ball:
         Rotates the position of the ball's center by a given angle (in degrees)
         around given axis. Object is rotated in OXY plane.
 
-        Args:
-            angle: rotation angle, in degrees
-            axis_pos: the position of the axis of rotation (x, y, z)
-
-        Returns:
-            rotated copy of the ball
+        :param angle: rotation angle, in degrees
+        :param axis_pos: the position of the axis of rotation (x, y, z)
+        :return: rotated copy of the ball
         """
         c = math.cos(math.radians(angle))
         s = math.sin(math.radians(angle))
@@ -72,9 +63,8 @@ class Ball:
         """
         Visualizes this ball on a given matplotlib's axis.
 
-        Args:
-            ax: ax object
-            color: the colour of the ball
+        :param ax: ax object
+        :param color: the colour of the ball
         """
         u = np.linspace(0, 2 * np.pi, 100)
         v = np.linspace(0, np.pi, 100)
@@ -89,17 +79,16 @@ class Ball:
 
 class Teddy:
     """
-    Experiments Object of Interest (OOI). Instances of this class are
+    Experiment's Object of Interest (OOI). Instances of this class are
     immutable.
     """
     def __init__(self, belly_pos, scale, head_offset=1):
         """
         OOI constructor.
 
-        Args:
-            belly_pos: position of the belly's center
-            scale: the belly's radius
-            head_offset: offset between Teddy's belly and the head/paw.
+        :param belly_pos: position of the belly's center
+        :param scale: the belly's radius
+        :param head_offset: offset between Teddy's belly and the head/paw.
         """
         self.angle = 0 # current rot. angle
         # Belly.
@@ -123,8 +112,7 @@ class Teddy:
 
     def contains(self, points):
         """
-        Returns:
-            mask with 1's if given point is inside the OOI, 0 otherwise.
+        :return: mask with 1's if given point is inside the OOI, 0 otherwise.
         """
         ret = self.belly.contains(points)
         ret = np.logical_or(ret, self.head.contains(points))
@@ -137,12 +125,9 @@ class Teddy:
         Rotates the position of the Teddy's belly center by a given angle
         (in degrees) around given axis. Object is rotated in OXY plane.
 
-        Args:
-            angle: rotation angle, in degrees
-            axis_pos: the position of the axis of rotation (x, y, z)
-
-        Returns:
-            rotated copy of the Teddy
+        :param angle: rotation angle, in degrees
+        :param axis_pos: the position of the axis of rotation (x, y, z)
+        :return: rotated copy of the Teddy
         """
         if axis_pos is None:
             axis_pos = self.belly.pos
@@ -161,11 +146,8 @@ class Teddy:
         """
         Moves the OOI by a given vector.
 
-        Args:
-            t: a translation vector
-
-        Returns:
-            translated ball (a copy).
+        :param t: a translation vector
+        :return: translated ball (a copy).
         """
         new_belly = self.belly.translate(t)
         new_head = self.head.translate(t)
@@ -179,8 +161,7 @@ class Teddy:
         """
         Visualizes OOI on a given matplotlib's axis.
 
-        Args:
-            ax: ax object
+        :param ax: ax object
         """
         self.belly.plot_mesh(ax, 'b')
         self.head.plot_mesh(ax, 'r')
@@ -196,7 +177,16 @@ class Teddy:
 
 class ScatterersPhantom:
     """
-    Phantom - a container for examined OOIs.
+    Phantom's constructor, a container for the examined OOIs.
+    
+    :param objects: phantom's objects
+    :param x_border: a tuple (x limit left, x limit right)
+    :param y_border: a tuple (y limit left, y limit right)
+    :param z_border: a tuple (z limit left, z limit right)
+    :param n_scatterers: number of scatters within are of the OOI - currently Teddy instance
+    :param n_bck_scatterers: number of background scatters - outside of the OOI area
+    :param bck_amp: amplitude of scatters outside of the OOI area
+    :param obj_amp: amplitude of scatters inside OOI area
     """
     def __init__(
         self,
@@ -208,20 +198,8 @@ class ScatterersPhantom:
         n_bck_scatterers,
         seed=None,
     ):
-        """
-        Phantom's constructor.
-
-        Args:
-            objects: phantom's objects
-            x_border: a tuple (x limit left, x limit right)
-            y_border: a tuple (y limit left, y limit right)
-            z_border: a tuple (z limit left, z limit right)
-            n_scatterers: number of scatters within are of the OOI - currently Teddy instance
-            n_bck_scatterers: number of background scatters -  outside of the OOI area
-        """
+    
         self.objects = objects
-        self.initial_objects = objects
-        self.current_state = 0 # initial pos
         self.x_border = x_border
         self.y_border = y_border
         self.z_border = z_border
@@ -276,14 +254,13 @@ class ScatterersPhantom:
             obj.plot_mesh(ax)
 
     def get_points(self, window):
-        # TODO(pjarosik) this method should generate points only once!
         """
         Returns positions and amps of scatterers scanned by the probe, in the
         format ready to use in Field II simulator.
-        Returns:
-            (points, amps), where:
-                points - an array (N,3) with scatterers positions (x,y,z)
-                amps - point amplitude
+        
+        :return: (points, amps), where:
+            points - an array (N,3) with scatterers positions (x,y,z)
+            amps - point amplitude
         """
         # FOV.
         x_size, y_size = window  # [m], [m]

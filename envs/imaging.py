@@ -5,6 +5,15 @@ from envs.utils import to_string, copy_and_apply
 
 
 class Probe:
+    """
+    Probe used to scan the environment.
+    
+    :param pos: 3-D position of the probe.
+    :param angle: angle of the probe.
+    :param width: width of the probe (x axis)
+    :param height: height of the probe (z axis)
+    :param focal_depth: focal depth of the probe.
+    """
     def __init__(self, pos, angle, width, height, focal_depth):
         self.pos = np.array(pos)
         self.angle = angle
@@ -16,11 +25,8 @@ class Probe:
         """
         Moves the position of the probe.
 
-        Args:
-            t: translation vector
-
-        Returns:
-            displaced probe (a copy)
+        :param t: translation vector
+        :return: displaced probe (a copy)
         """
         return copy_and_apply(
             self, deep=True,
@@ -31,11 +37,8 @@ class Probe:
         """
         Rotates scanning plane of the probe.
 
-        Args:
-            angle: rotation angle (in degrees between [-180, 180]).
-
-        Returns:
-            rotated probe (a copy)
+        :param angle: rotation angle (in degrees between [-180, 180]).
+        :return: rotated probe (a copy)
         """
         return copy_and_apply(
             self, deep=True,
@@ -45,11 +48,8 @@ class Probe:
         """
         Moves upwards/downwards a focal depth of the imaging system.
 
-        Args:
-            delta_z: displacement of the focal point
-
-        Returns:
-            a probe with new position of the focal point
+        :param: delta_z: displacement of the focal point
+        :return: a probe with new position of the focal point
         """
         return copy_and_apply(
             self, deep=True,
@@ -57,8 +57,7 @@ class Probe:
 
     def get_focal_point_pos(self):
         """
-        Returns:
-            a 3-D array with the position of the focal point
+        :return: 3-D array with the position of the focal point.
         """
         return np.array([self.pos[0], self.pos[1], self.focal_depth])
 
@@ -67,8 +66,7 @@ class Probe:
         Returns the Field of View from given position and angle of
         the probe.
 
-        Returns:
-            points, amplitudes, phantom in new FOV
+        :return: points, amplitudes, phantom in new FOV
         """
         ph_cpy = phantom.translate(-self.pos)
         ph_cpy = ph_cpy.rotate_xy(-self.angle)
@@ -79,11 +77,25 @@ class Probe:
     def __str__(self):
         return to_string(self)
 
-
 class ImagingSystem:
+
+    """
+    ImagingSystem: A class used to create images of the env.
+
+    :param c: speed of sound
+    :param fs: sampling frequency
+    :param image_width: width of the output image, in [m]
+    :param image_height: height of the output image, in [m]
+    :param image_resolution: image resolution, (width, height) [pixels]
+    :param median_filter_size: the size of median filter
+    :param dr_threshold: dynamic range threshold
+    :param dec: RF data decimation factor
+    :param no_lines: number of lines of RF data. 
+    """
     def __init__(
         self,
-        c, fs,
+        c,
+        fs,
         image_width,
         image_height,
         image_resolution,
@@ -92,19 +104,7 @@ class ImagingSystem:
         no_lines,
         dec=1
     ):
-        """
-        ImagingSystem's constructor.
 
-        Args:
-            c: speed of sound
-            fs: sampling frequency
-            image_width: width of the output image, in [m]
-            image_height: height of the output image, in [m]
-            image_resolution: image resolution, (width, height) [pixels]
-            median_filter_size: the size of median filter
-            dr_threshold: dynamic range threshold
-            dec: RF data decimation factor
-        """
         self.c = c
         self.fs = fs
         self.image_width = image_width
@@ -139,11 +139,8 @@ class ImagingSystem:
         """
         Computes new B-mode image from given RF data.
 
-        Args:
-            rf: recorded ultrasound signal to image
-
-        Returns:
-            B-mode image with values \in [0, 1]
+        :param rf: recorded ultrasound signal to image
+        :return: B-mode image with values in [0, 1]
         """
         data = rf[::self.dec, :]
         data = self._detect_envelope(data)

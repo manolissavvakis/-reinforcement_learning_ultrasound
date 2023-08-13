@@ -1,24 +1,46 @@
 {
 	"log_dir": "/home/spbtu/Manolis_Files/Thesis_Project/rlus",
-	"n_steps_per_episode": 50,
-	"n_steps_per_epoch": 100,
-	"epochs": 1000,
-	"gif_freq": 500,
-	"use_confidence": true,
-	"no_conf_workers": 1,
-
+	"task_type": "us_env",
+	"n_steps_per_episode": 30,
+	"n_steps_per_epoch": 60,
+	"epochs": 3000,
+	"use_confidence": false,
+	"callbacks":{
+		"gif_freq": 500,
+		"save_freq": 10,
+		"max_no_improvement_evals": 3,
+		"min_evals": 5,
+		"n_eval_episodes": 2,
+		"eval_freq": 20000,
+		"moving_window": 40,
+		"success_window": 10,
+		"verbose": 1
+	},
+	
+	"reward":{
+		"classic":{
+			"a_p": 0.5,
+			"a_r": 0.2,
+			"e_thresh": 0.03
+		},
+		"confidence":{
+			"a_p": 0.5,
+			"a_r": 0.2
+		}
+	},
+	
 	"env":{
 	
 		"probe":{
-			"pos": [-20e-3, -35e-3, 0],
+			"pos": [0e-3, 0e-3, 0],
 			"angle": 0,
 			"width": 40e-3,
 			"height": 10e-3,
-			"focal_depth": 10e-3
+			"focal_depth": 50e-3
 		},
 		
 		"teddy":{
-			"belly_pos": [0, 0, 50e-3],
+			"belly_pos": [0e-3, 0e-3, 50e-3],
 			"scale": 12e-3,
 			"head_offset": 0.9
 		},
@@ -26,14 +48,14 @@
 		"phantom":{
 			"x_border": [-40e-3, 40e-3],
 			"y_border": [-40e-3, 40e-3],
-			"z_border": [0, 90e-3],
+			"z_border": [0e-3, 90e-3],
 			"n_scatterers": 1e4,
 			"n_bck_scatterers": 1e3
 		},
 		
 		"imaging":{
 			"c": 1540,
-			"fs": 100e6,
+			"fs": 10e7,
 			"image_width": 40e-3,
 			"image_height": 90e-3,
 			"image_resolution": [40, 90],
@@ -44,26 +66,31 @@
 		},
 		
 		"probe_generator":{
-			"x_pos": [-15e-3, -10e-3, -5e-3, 0, 5e-3, 10e-3, 15e-3],
-			"y_pos": [-30e-3, -25e-3, -20e-3, -25e-3, -20e-3, -15e-3, -10e-3, -5e-3, 0, 5e-3, 10e-3, 15e-3],
-			"focal_pos": [50e-3],
-			"angle": [45, 60, 75, 90]
+			"random": true,
+			"x_pos": [-10e-3, 10e-3, 1e-3],
+			"y_pos": [-10e-3, 10e-3, 1e-3],
+			"focal_pos": [0e-3, 90e-3, 5],
+			"angle": [15, 90, 5]
 		},
 		
 		"trajectory_logger":{
 			"log_action_csv_freq": 1,
 			"log_state_csv_freq": 1,
-			"log_state_render_freq": 10
+			"log_state_render_freq": 200
 		},
 		
 		"no_workers": 4,
 		"use_cache": true,
-		"step_size": 5e-3,
-		"rot_deg": 5		
+		"step_size": 1e-3,
+		"focal_step": 5e-3,
+		"rot_deg": 5e-3,
+		"steps_tolerance": 3,
+		"noise_prob": 0,
+        "max_probe_dislocation": 0,
+        "noise_seed": 0
 	},
 	
 	"agent":{
-	
 		"net_arch": {"pi": [], "vf": []},
 		"activation_fn": "torch.nn.ReLU",
 		"gamma": 0.95,
@@ -73,7 +100,12 @@
 		"use_rms_prop": true,
 		"normalize_advantage": true,
 		"verbose": 1,
-		"seed": 42,
+		"seed": 30,
 		"reset_num_timesteps": false
-	}	
+	},
+	
+	"evaluation":{
+		"n_eval_episodes": 50
+	}
+
 }

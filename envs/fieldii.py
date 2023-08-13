@@ -29,6 +29,13 @@ LinearArrayParams = namedtuple("LinearArrayParams", [
 ])
 
 class Field2:
+    """
+    Field2: A class used to start Field2 sessions and
+        generate data.
+        
+    :param working_dir: working directory for Field2 sessions.
+    :param no_workers: number of workers for Field2 sessions.
+    """
     def __init__(self, working_dir=None, no_workers=1):
         self._remove_working_dir = working_dir is None
         if working_dir is None:
@@ -39,10 +46,27 @@ class Field2:
         self._start_sessions()
 
     def simulate_linear_array(
-            self,
-            point_positions, point_amplitudes, sampling_frequency,
-            no_lines=50, z_focus=60/1000, image_width=40/1000
+        self,
+        point_positions, point_amplitudes, sampling_frequency,
+        no_lines=50, z_focus=60/1000, image_width=40/1000
     ):
+        """
+        Create RF data.
+        Create a .mat file which includes all the necessary data to generate
+        the RF data. Then, go.* files are used as signals to begin the rf data
+        scanlines generation process and ready.* files mean that scanlines are
+        successfully generated. Merge the scanlines and delete .mat, go and ready
+        files.
+        
+        :param point_positions: (n, 3) points used to generate the RF data.
+        :param point_amplitudes: (n, 1) amplitudes of the points used.
+        :param sampling_frequency: sampling frequency.
+        :param no_lines: number of lines of RF data.
+        :param z_focus: focal depth of the probe.
+        :param image_width: number of columns of RF data.
+        :return: RF data and a vector including start time of each
+            scanline.
+        """
         self._assert_workers_exists()
         input_file_path = os.path.join(self.working_dir.name, "input.mat")
         self._save_mat_file(
@@ -87,14 +111,14 @@ class Field2:
         self._cleanup()
 
     def _save_mat_file(
-            self,
-            filename,
-            point_positions,
-            point_amplitudes,
-            sampling_frequency,
-            no_lines,
-            z_focus,
-            image_width
+        self,
+        filename,
+        point_positions,
+        point_amplitudes,
+        sampling_frequency,
+        no_lines,
+        z_focus,
+        image_width
     ):
         scipy.io.savemat(
             filename, {
@@ -106,6 +130,9 @@ class Field2:
         })
 
     def _start_sessions(self):
+        """
+        Start a Field2 session.
+        """
         self._pipes = [self._start_session(worker) for worker in range(self.no_workers)]
         print("Started %d MATLAB worker(s)." % len(self._pipes))
         timeout = 120
@@ -121,14 +148,16 @@ class Field2:
         print("...OK!")
 
     def _start_session(self, session_id):
-        # TODO find more elegant way
+        """
+        Initialize Field2 simulation.
+        
+        ..warning:
+            Add Field2 to path unless it's added in matlab's path already.
+            Also, in matlab_call, add matlab's path.
+        """
         prev_dir = os.getcwd()
         os.chdir(os.path.dirname(__file__))
         fn_call = (
-        
-        # ~~~
-        # Add Field2 to path. (Field2 is added in matlab's path already, so we don't need to add it here but nvm.)
-        # ~~~
             "addpath('/home/spbtu/Manolis_Files/Field2'), " +
             "field_init, " +
             "try, " +
@@ -140,17 +169,15 @@ class Field2:
             "fprintf('%s, %s \\n', ex.identifier, ex.message)," +
             "exit(1), " +
             "end ")
-        #matlab_call = ["matlab", "-nosplash", "-nodesktop", "-r", fn_call]
         matlab_call = ["/usr/local/MATLAB/R2018a/bin/matlab", "-nosplash", "-nodesktop", "-r", fn_call]
         pipe = subprocess.Popen(matlab_call)
         os.chdir(prev_dir)
         return pipe
 
-    # ~~~
-    # Check if there are any workers left.
-    # If pipe.poll() is not None, process has completed.
-    # ~~~
     def _assert_workers_exists(self):
+        """
+        Check if there are any workers left.
+        """
         for worker in range(self.no_workers):
             if self._pipes[worker].poll() is not None:
                 raise RuntimeError("Worker %d is dead! Check logs, why he has been stopped." % worker)
@@ -184,6 +211,9 @@ class Field2:
         return (rf_array, t_start_vector)
 
     def _cleanup(self):
+        """
+        Clear Field2 sessions.
+        """
         for worker in range(self.no_workers):
             open(os.path.join(self.working_dir.name, ('die.%d' % worker)), 'a').close()
         print("Waiting till all child processes die...")

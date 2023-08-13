@@ -46,6 +46,7 @@ function [] = simulate_linear_array(id, input_path, output_path)
     end
 
     input_file = fullfile(input_path, "input.mat");
+
     path_to_go = fullfile(input_path, strcat("go.", num2str(id)));
     path_to_die = fullfile(input_path, strcat("die.", num2str(id)));
 	
@@ -81,10 +82,6 @@ function [] = simulate_linear_array(id, input_path, output_path)
             focal_zones = [z_focus];
             Nf = max(size(focal_zones));
             focus_times = (focal_zones-10/1000)/c; % TODO why -10/1000?
-
-            %z_focus = 60/1000;                %  Transmit focus, XMIT FOCAL POINT
-            %no_lines = 50;                    %  Number of lines in image TODO parametrize
-            %image_width = 40/1000;            %  Size of image sector THE WIDTH OF THE ENVIRONMENT
 			
             no_lines = double(no_lines);
             d_x = image_width/no_lines;       %  Increment for image
@@ -109,7 +106,7 @@ function [] = simulate_linear_array(id, input_path, output_path)
                     
                  %   fid = fopen(lock_filename, 'w');
                     
-                    %disp(strcat("creating line ", num2str(i)));
+                    disp(strcat("creating line ", num2str(i)));
                     % We are first in locking this scanline.
 								
 					% The imaging direction
