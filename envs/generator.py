@@ -99,11 +99,11 @@ class RandomProbeGenerator(ProbeGenerator):
         self.rng = random.Random(seed)
 
     def get_next_probe(self):
-    """
-    Get a new random starting positions for the probe.
-    
-    :return: a probe
-    """
+        """
+        Get a new random starting positions for the probe.
+        
+        :return: a probe
+        """
         x = self.rng.choice(self.x_pos)
         y = self.rng.choice(self.y_pos)
         fd = self.rng.choice(self.focal_pos)

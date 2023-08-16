@@ -5,25 +5,25 @@ import pandas as pd
 
 
 class TrajectoryLogger:
-        """
-        Logger object that records information about the actions of the agent.
-        
-        :param log_dir: where to store logging information
-        :param log_action_csv_freq: how often performed actions should be logged.
-            When False, do not log actions to CSV files
-        :param log_state_csv_freq:  how often obtained states should be logged.
-            When False, do not log the data to CSV files
-        :param log_state_render_freq: how often env.renders should be logged to file,
-            When False, do not log the data
-        :param state_views: type of rendering.
-        """
+    """
+    Logger object that records information about the actions of the agent.
+    
+    :param log_dir: where to store logging information
+    :param log_action_csv_freq: how often performed actions should be logged.
+        When False, do not log actions to CSV files
+    :param log_state_csv_freq:  how often obtained states should be logged.
+        When False, do not log the data to CSV files
+    :param log_state_render_freq: how often env.renders should be logged to file,
+        When False, do not log the data
+    :param state_views: type of rendering.
+    """
     def __init__(self,
-                 log_dir=None,
-                 log_action_csv_freq=1,
-                 log_state_csv_freq=1,
-                 log_state_render_freq=10,  # 0 or None means do not log info
-                 state_views=('env', 'observation')
-                 ):
+                log_dir=None,
+                log_action_csv_freq=1,
+                log_state_csv_freq=1,
+                log_state_render_freq=10,  # 0 or None means do not log info
+                state_views=('env', 'observation')
+     ):
 
         self.log_action_csv_freq = log_action_csv_freq
         self.log_state_csv_freq = log_state_csv_freq
@@ -122,9 +122,9 @@ class TrajectoryLogger:
                     logger.log(step, env)
                 
     def save_trajectory(self, done):
-    """
-    When episode's over, save all the data collected to a csv file.
-    """
+        """
+        When episode's over, save all the data collected to a csv file.
+        """
         if done:
             for logger in (self.action_logger, self.state_logger):
                 df = pd.DataFrame(logger.content, columns=logger.fieldnames)

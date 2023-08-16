@@ -235,19 +235,21 @@ class SaveCacheCallback(BaseCallback):
         self.exp_dir = exp_dir
         self.trigger = True
     
-    def _on_step(self):
+    def _on_step(self) -> bool:
+        return True
+        """
         episode = self.training_env.envs[0].current_episode
         if episode % 200 != 0:
             self.trigger = True
         else:
             if self.trigger:
                 self.trigger = False
-                cache = self.training_env.envs[0]._cache
+                cache = self.training_env.envs[0].cache
                 np.savez(os.path.join(self.exp_dir, 'cache_memory.npz'), **cache)
-                
+        """               
         
     def _on_training_end(self):
-        cache = self.training_env.envs[0]._cache
+        cache = self.training_env.envs[0].cache
         np.savez(os.path.join(self.exp_dir, 'cache_memory.npz'), **cache)
         
 

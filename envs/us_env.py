@@ -81,10 +81,10 @@ class PhantomUsEnv(gym.Env):
         self.reward_params = reward_params
         if self.use_cache:
             if isinstance(self.use_cache, bool):
-                self._cache = {}
+                self.cache = {}
             elif isinstance(self.use_cache, str):
                 try:
-                    self._cache = np.load('cache_memory.npz')
+                    self.cache = np.load('cache_memory.npz')
                 except: 
                     raise Exception('The cache file specified does not exist.')
 
@@ -398,13 +398,14 @@ class PhantomUsEnv(gym.Env):
             int(round(self.probe.focal_depth, 3)*1e3),
             int(round(self.probe.angle))
         )
-        if state in self._cache:
+        state = str(state)
+        if state in self.cache:
             _LOGGER.info("Using cached value for probe state (x, y, z, theta)=%s"
-                          % str(state))
+                          % state)
         else:
             bmode = self._get_image()
-            self._cache[state] = bmode
-        return self._cache[state]
+            self.cache[state] = bmode
+        return self.cache[state]
             
     def _check_termination_conditions(self):
         """

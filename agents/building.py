@@ -160,6 +160,12 @@ def main():
             os.path.join(CHECKPOINT_LOGS, 'rl_model_%d_steps.zip' %loader.load),
             env,
         )
+        
+        # Set the current episode.
+        # -1 subtraction is done because env.reset() sets current episode to +1.
+        env.current_episode = loader.episode - 1
+        print('Loaded episode: ' + str(env.current_episode))
+        
         # Check if there is more training steps left.
         remaining_steps = (N_STEPS_PER_EPOCH*EPOCHS) - loader.load
         assert remaining_steps>=0, 'Steps argument is less than 0. There is no training.'
